@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CudaCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Interfaces">
+      <UniqueIdentifier>{958215d8-cc5c-487b-bee3-b86fd786f985}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Selections">
+      <UniqueIdentifier>{6b3ffb53-40c5-4633-a63a-cbf0c1abad90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Crossovers">
+      <UniqueIdentifier>{7efa9cf6-f0ea-4d5d-adfa-21e55aba9023}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Mutations">
+      <UniqueIdentifier>{1b58cd62-4eb8-4e43-834d-f5c4b6a1ecf0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Metrics">
+      <UniqueIdentifier>{1720d6ad-f54e-4092-8bdc-e2093c6f5488}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Interfaces\IMutationOperator.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaces\ICrossoverOperator.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaces\ISelectionOperator.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="Metrics\CeilEuclidean2D.h">
+      <Filter>Metrics</Filter>
+    </ClInclude>
+    <ClInclude Include="Metrics\Euclidean2D.h">
+      <Filter>Metrics</Filter>
+    </ClInclude>
+    <ClInclude Include="Interfaces\IMetric.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="Crossovers\IntervalCrossover.h">
+      <Filter>Crossovers</Filter>
+    </ClInclude>
+    <ClInclude Include="Selections\RandomSelection.h">
+      <Filter>Selections</Filter>
+    </ClInclude>
+    <ClInclude Include="Mutations\SwapMutation.h">
+      <Filter>Mutations</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Selections\RandomSelection.cpp">
+      <Filter>Selections</Filter>
+    </ClCompile>
+    <ClCompile Include="Crossovers\IntervalCrossover.cpp">
+      <Filter>Crossovers</Filter>
+    </ClCompile>
+    <ClCompile Include="Metrics\CeilEuclidean2D.cpp">
+      <Filter>Metrics</Filter>
+    </ClCompile>
+    <ClCompile Include="Metrics\Euclidean2D.cpp">
+      <Filter>Metrics</Filter>
+    </ClCompile>
+    <ClCompile Include="Mutations\SwapMutation.cpp">
+      <Filter>Mutations</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
