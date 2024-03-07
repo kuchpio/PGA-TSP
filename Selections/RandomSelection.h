@@ -5,5 +5,5 @@
 
 class RandomSelection : ISelectionOperator
 {
-	void selection(int** population, int* chromosome, int size, int populationSize, curandState* state) const override;
+	void selection(int* drawnChromosome, int* chromosome, int size, int populationSize, curandState* state) const override;
 };
