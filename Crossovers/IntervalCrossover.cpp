@@ -1,12 +1,12 @@
 #include "IntervalCrossover.h"
 #include <cuda_runtime.h>
 #include <cstdlib>
+#include <curand_kernel.h>
 
-__device__ __host__ 
-int* IntervalCrossover::crossover(int* parent1, int* parent2, int size) const
+__device__ __host__ int* IntervalCrossover::crossover(int* parent1, int* parent2, int size, curandState* state) const
 {
-	int left = rand() % (size - 1);
-	int right = left + rand() % (size - left);
+	int left = curand(state) % (size - 1);
+	int right = left + curand(state) % (size - left);
 	int* child = new int[size] { -1 };
 	for (int i = left; i <= right; ++i)
 	{
