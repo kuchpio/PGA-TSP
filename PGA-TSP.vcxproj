@@ -78,6 +78,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="main.cpp" />
+    <CudaCompile Include="RandomGenerator\RandomGenerator.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Crossovers\IntervalCrossover.cpp" />
@@ -95,6 +96,7 @@
     <ClInclude Include="Metrics\CeilEuclidean2D.h" />
     <ClInclude Include="Metrics\Euclidean2D.h" />
     <ClInclude Include="Mutations\SwapMutation.h" />
+    <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
     <ClInclude Include="Selections\RandomSelection.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

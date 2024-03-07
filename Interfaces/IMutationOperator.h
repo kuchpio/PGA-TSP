@@ -3,6 +3,6 @@
 class IMutationOperator
 {
 public:
-	virtual void mutate(int* chromosome, int size) const = 0;
+	virtual void mutate(int* chromosome, int size, curandState* state) const = 0;
 	virtual ~IMutationOperator() = default;
 };
