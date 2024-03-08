@@ -4,6 +4,7 @@
 #include "Crossovers/IntervalCrossover.h"
 #include "Mutations/SwapMutation.h"
 #include "RandomGenerator/RandomGenerator.cuh"
+#include "Texture/Texture.h"
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"

@@ -98,6 +98,10 @@
     <ClInclude Include="Mutations\SwapMutation.h" />
     <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
     <ClInclude Include="Selections\RandomSelection.h" />
+    <ClInclude Include="Texture\Texture.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Texture\Texture.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
