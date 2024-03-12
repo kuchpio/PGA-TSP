@@ -74,5 +74,8 @@
     <ClCompile Include="Mutations\SwapMutation.cpp">
       <Filter>Mutations</Filter>
     </ClCompile>
+    <ClCompile Include="Selections\ISelection.cpp">
+      <Filter>Selections</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
