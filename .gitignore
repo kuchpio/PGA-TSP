@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # make product
 pga-tsp
+
+# tsp files
+*.tsp
