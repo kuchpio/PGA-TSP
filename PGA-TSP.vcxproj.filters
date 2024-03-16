@@ -25,6 +25,9 @@
     <Filter Include="RandomGenerator">
       <UniqueIdentifier>{a42d2267-b797-45f9-861d-42e9efe84eea}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Texture">
+      <UniqueIdentifier>{a8699ec9-eb84-4778-ab2b-6d0581626447}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Interfaces\IMutationOperator.h">
@@ -57,6 +60,9 @@
     <ClInclude Include="RandomGenerator\RandomGenerator.cuh">
       <Filter>RandomGenerator</Filter>
     </ClInclude>
+    <ClInclude Include="Texture\Texture.h">
+      <Filter>Texture</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Selections\RandomSelection.cpp">
@@ -74,5 +80,10 @@
     <ClCompile Include="Mutations\SwapMutation.cpp">
       <Filter>Mutations</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Texture\Texture.cpp">
+      <Filter>Texture</Filter>
+    </Text>
   </ItemGroup>
 </Project>
