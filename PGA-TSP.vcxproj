@@ -13,6 +13,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0FB70673-98E6-413E-AA01-2828358EC0F0}</ProjectGuid>
     <RootNamespace>PGA_TSP</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -47,6 +48,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -55,6 +57,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <AdditionalOptions>-std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -64,6 +67,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -74,23 +78,30 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <AdditionalOptions>-std=c++20 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="Instance\GlobalMemoryInstance.cpp" />
     <CudaCompile Include="main.cpp" />
     <CudaCompile Include="RandomGenerator\RandomGenerator.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Crossovers\IntervalCrossover.cpp" />
-    <ClCompile Include="Metrics\CeilEuclidean2D.cpp" />
-    <ClCompile Include="Metrics\Euclidean2D.cpp" />
+    <ClCompile Include="Instance\HostMemoryInstance.cpp" />
+    <ClCompile Include="Instance\InstanceReader.cpp" />
     <ClCompile Include="Mutations\SwapMutation.cpp" />
     <ClCompile Include="Selections\RandomSelection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Crossovers\IntervalCrossover.h" />
+    <ClInclude Include="Instance\DeviceInstance.h" />
+    <ClInclude Include="Instance\DeviceMemoryInstanceProxy.h" />
+    <ClInclude Include="Instance\GlobalMemoryInstance.h" />
+    <ClInclude Include="Instance\HostMemoryInstance.h" />
+    <ClInclude Include="Instance\HostInstance.h" />
+    <ClInclude Include="Instance\InstanceReader.h" />
     <ClInclude Include="Interfaces\ICrossoverOperator.h" />
-    <ClInclude Include="Interfaces\IMetric.h" />
     <ClInclude Include="Interfaces\IMutationOperator.h" />
     <ClInclude Include="Interfaces\ISelectionOperator.h" />
     <ClInclude Include="Metrics\CeilEuclidean2D.h" />
@@ -98,6 +109,10 @@
     <ClInclude Include="Mutations\SwapMutation.h" />
     <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
     <ClInclude Include="Selections\RandomSelection.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitignore" />
+    <None Include="Makefile" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

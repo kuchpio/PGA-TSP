@@ -1,9 +1,9 @@
 ﻿#include <fstream>
 #include <iostream>
 #include <numeric>
-#include "Instance/IInstance.h"
 #include "Instance/InstanceReader.h"
-#include "Instance/GlobalMemoryInstance.h"
+#include "Instance/HostInstance.h"
+#include "Instance/HostMemoryInstance.h"
 
 void usage(std::string programName) {
     std::cerr << 
@@ -30,9 +30,12 @@ int main(int argc, char *argv[])
     InstanceReader instanceReader(input);                                                                                                           
     input.close();
 
-    const IInstance *hostInstance = instanceReader.createHostMemoryInstance();
-    const IInstance *deviceGlobalMemoryInstance = 
-        instanceReader.createDeviceMemoryInstance<GlobalMemoryInstance>();
+    if (cudaSetDevice(0) != cudaSuccess) {
+        std::cerr << "Could not set device. \n";
+        return EXIT_FAILURE;
+    }
+
+    const HostInstance<HostMemoryInstance> *hostInstance = instanceReader.createInstance<HostMemoryInstance>();
 
     int *canonicalCycle = new int[hostInstance->size()];
     std::iota(canonicalCycle, canonicalCycle + hostInstance->size(), 0);
@@ -41,12 +44,13 @@ int main(int argc, char *argv[])
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (host): " << 
         hostInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
-    std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device global memory): " << 
-        deviceGlobalMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
-
     delete hostInstance;
-    delete deviceGlobalMemoryInstance;
     delete[] canonicalCycle;
+
+    if (cudaDeviceReset() != cudaSuccess) {
+        std::cerr << "Could not reset device. \n";
+        return EXIT_FAILURE;
+    }
 
 	return EXIT_SUCCESS;
 }

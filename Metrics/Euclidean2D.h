@@ -1,14 +1,12 @@
 #pragma once
 
-#include "../Interfaces/IMetric.h"
-#include <string>
 #include <cuda_runtime.h>
+#include <string>
 
-class Euclidean2D : public IMetric
+class Euclidean2D
 {
-private:
-    const std::string CODE = "EUC_2D";
-public:
-	__device__ __host__ int distance(float x1, float y1, float x2, float y2) const override;
-    const std::string& code() const override;
+    inline static const std::string CODE = "EUC_2D";
+    __device__ __host__ inline static int distance(float x1, float y1, float x2, float y2) {
+	    return (int)roundf(sqrtf((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)));
+    }
 };

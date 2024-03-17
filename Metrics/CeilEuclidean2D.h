@@ -1,14 +1,12 @@
 #pragma once
 
-#include "../Interfaces/IMetric.h"
-#include <string>
 #include <cuda_runtime.h>
 
-class CeilEuclidean2D : public IMetric
+class CeilEuclidean2D
 {
-private:
-    const std::string CODE = "CEIL_2D";
 public:
-	__device__ __host__ int distance(float x1, float y1, float x2, float y2) const override;
-    const std::string& code() const override;
+    inline static const char* CODE = "CEIL_2D";
+    __device__ __host__ inline static int distance(float x1, float y1, float x2, float y2) {
+	    return (int)ceilf(sqrtf((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)));
+    }
 };
