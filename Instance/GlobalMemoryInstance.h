@@ -8,9 +8,9 @@ class GlobalMemoryInstance: public IInstance {
         int _size;
 
     public:
-        GlobalMemoryInstance(float *x, float *y, IMetric *metric, int size);
-        int size() const override;
-        __device__ int edgeWeight(int from, int to) const override;
-        __device__ int hamiltonianCycleWeight(int *cycle) const override;
+        GlobalMemoryInstance(float *x, float *y, const IMetric *metric, int size);
+        __device__ __host__ int size() const override;
+        __device__ __host__ int edgeWeight(int from, int to) const override;
+        __device__ __host__ int hamiltonianCycleWeight(int *cycle) const override;
         ~GlobalMemoryInstance();
 };

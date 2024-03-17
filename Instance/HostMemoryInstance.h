@@ -8,8 +8,8 @@ class HostMemoryInstance: public IInstance {
 
     public:
         HostMemoryInstance(float *x, float *y, const IMetric *metric, int size);
-        int size() const override;
-        int edgeWeight(int from, int to) const override;
-        int hamiltonianCycleWeight(int *cycle) const override;
+        __device__ __host__ int size() const override;
+        __device__ __host__ int edgeWeight(int from, int to) const override;
+        __device__ __host__ int hamiltonianCycleWeight(int *cycle) const override;
         ~HostMemoryInstance();
 };

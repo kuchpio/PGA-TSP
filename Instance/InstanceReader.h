@@ -5,6 +5,7 @@
 #include "../Metrics/Euclidean2D.h"
 #include "../Metrics/CeilEuclidean2D.h"
 #include "HostMemoryInstance.h"
+#include "DeviceMemoryInstanceProxy.h"
 
 class InstanceReader {
     private:
@@ -21,6 +22,12 @@ class InstanceReader {
     public:
         InstanceReader(std::istream& input);
         const HostMemoryInstance* createHostMemoryInstance() const; 
+
+        template<class DeviceMemoryInstance>
+        const DeviceMemoryInstanceProxy<DeviceMemoryInstance>* createDeviceMemoryInstance() const {
+            return new DeviceMemoryInstanceProxy<DeviceMemoryInstance>(this->_x, this->_y, this->_dimension, this->_metric, sizeof(Euclidean2D));
+        } 
+
         friend std::ostream& operator<<(std::ostream& output, const InstanceReader& instanceReader);
         ~InstanceReader();
 };

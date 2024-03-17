@@ -4,6 +4,7 @@
 #include <numeric>
 #include "Instance/IInstance.h"
 #include "Instance/InstanceReader.h"
+#include "Instance/GlobalMemoryInstance.h"
 
 void usage(std::string programName) {
     std::cerr << 
@@ -30,15 +31,23 @@ int main(int argc, char *argv[])
     InstanceReader instanceReader(input);                                                                                                           
     input.close();
 
-    const IInstance *instance = instanceReader.createHostMemoryInstance();
-    int *canonicalCycle = new int[instance->size()];
-    std::iota(canonicalCycle, canonicalCycle + instance->size(), 0);
+    const IInstance *hostInstance = instanceReader.createHostMemoryInstance();
+    const IInstance *deviceGlobalMemoryInstance = 
+        instanceReader.createDeviceMemoryInstance<GlobalMemoryInstance>();
+
+    int *canonicalCycle = new int[hostInstance->size()];
+    std::iota(canonicalCycle, canonicalCycle + hostInstance->size(), 0);
 
     std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n";
-    std::cout << "CANONICAL CYCLE TOTAL DISTANCE: " << 
-        instance->hamiltonianCycleWeight(canonicalCycle) << "\n";
+    std::cout << "CANONICAL CYCLE TOTAL DISTANCE (host): " << 
+        hostInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
-    delete instance;
+    std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device global memory): " << 
+        deviceGlobalMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
+
+    delete hostInstance;
+    delete deviceGlobalMemoryInstance;
     delete[] canonicalCycle;
+
 	return EXIT_SUCCESS;
 }
