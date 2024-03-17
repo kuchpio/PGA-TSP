@@ -43,10 +43,10 @@ InstanceReader::InstanceReader(std::istream& input) {
     this->_comment = keyValuePairs["COMMENT"];
     this->_dimension = std::stoi(keyValuePairs["DIMENSION"]);
     std::string metricCode = keyValuePairs["EDGE_WEIGHT_TYPE"]; 
-    this->_metric = *std::find_if(this->METRICS, this->METRICS + this->METRIC_COUNT, 
+    this->_selectedMetricIndex = std::find_if(this->METRICS, this->METRICS + this->METRIC_COUNT, 
         [metricCode](const IMetric *m) {
             return m->code() == metricCode;
-        });
+        }) - this->METRICS;
     this->_x = new float[this->_dimension];
     this->_y = new float[this->_dimension];
 
@@ -62,17 +62,21 @@ std::ostream& operator<<(std::ostream& output, const InstanceReader& instanceRea
         "TYPE: " << instanceReader._type << "\n" << 
         "COMMENT: " << instanceReader._comment << "\n" <<
         "DIMENSION: " << instanceReader._dimension << "\n" <<
-        "METRIC: " << instanceReader._metric->code() << "\n";
+        "METRIC: " << instanceReader.METRICS[instanceReader._selectedMetricIndex]->code();
     return output;
 }
 
 const HostMemoryInstance* InstanceReader::createHostMemoryInstance() const {
-    return new HostMemoryInstance(this->_x, this->_y, this->_metric, this->_dimension);
+    return new HostMemoryInstance(
+        this->_x, this->_y, this->_dimension, 
+        this->METRICS[this->_selectedMetricIndex]
+    );
 }
 
 InstanceReader::~InstanceReader() {
     for (int i = 0; i < this->METRIC_COUNT; i++) 
         delete this->METRICS[i];
+
     delete [] this->_x;
     delete [] this->_y;
 }

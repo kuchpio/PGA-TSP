@@ -7,9 +7,9 @@ class HostMemoryInstance: public IInstance {
         int _size;
 
     public:
-        HostMemoryInstance(float *x, float *y, const IMetric *metric, int size);
+        HostMemoryInstance(const float *x, const float *y, const int size, const IMetric *metric);
         __device__ __host__ int size() const override;
-        __device__ __host__ int edgeWeight(int from, int to) const override;
-        __device__ __host__ int hamiltonianCycleWeight(int *cycle) const override;
+        __device__ __host__ int edgeWeight(const int from, const int to) const override;
+        __device__ __host__ int hamiltonianCycleWeight(const int *cycle) const override;
         ~HostMemoryInstance();
 };

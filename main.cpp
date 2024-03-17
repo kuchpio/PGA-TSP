@@ -1,5 +1,4 @@
-﻿#include <cstdlib>
-#include <fstream>
+﻿#include <fstream>
 #include <iostream>
 #include <numeric>
 #include "Instance/IInstance.h"

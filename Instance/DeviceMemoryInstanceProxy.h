@@ -3,12 +3,30 @@
 #include <iostream>
 
 template<class DeviceMemoryInstance>
+__global__ 
+void sizeKernel(const DeviceMemoryInstance* deviceMemoryInstance, int *size) {
+    *size = deviceMemoryInstance->size();
+}
+
+template<class DeviceMemoryInstance>
+__global__ 
+void edgeWeightKernel(const DeviceMemoryInstance* deviceMemoryInstance, const int from, const int to, int *edgeWeight) {
+    *edgeWeight = deviceMemoryInstance->edgeWeight(from, to);
+}
+
+template<class DeviceMemoryInstance>
+__global__ 
+void hamiltonianCycleWeightKernel(const DeviceMemoryInstance* deviceMemoryInstance, const int *cycle, int *cycleWeight) {
+    *cycleWeight = deviceMemoryInstance->hamiltonianCycleWeight(cycle);
+}
+
+template<class DeviceMemoryInstance>
 class DeviceMemoryInstanceProxy: public IInstance {
 private:
     DeviceMemoryInstance* d_deviceMemoryInstance;
 
 public:
-    DeviceMemoryInstanceProxy(float *x, float *y, int vertexCount, const IMetric *metric, size_t metricSize) {
+    DeviceMemoryInstanceProxy(const float *x, const float *y, const int vertexCount, const IMetric *metric, const size_t metricSize) {
         // Copy x, y, metric to device
         float *d_x, *d_y;
         IMetric *d_metric;
@@ -47,7 +65,9 @@ public:
         }
 
         // Initialize deviceMemoryInstance on host
-        const DeviceMemoryInstance *h_deviceMemoryInstance = new DeviceMemoryInstance(d_x, d_y, (const IMetric*) d_metric, vertexCount);
+        const DeviceMemoryInstance *h_deviceMemoryInstance = new DeviceMemoryInstance(
+            (const float*) d_x, (const float*) d_y, vertexCount, (const IMetric*) d_metric
+        );
 
         // Memcpy deviceMemoryInstance to device
         if ((status = cudaMalloc(&this->d_deviceMemoryInstance, sizeof(DeviceMemoryInstance))) != cudaSuccess) {
@@ -74,54 +94,106 @@ public:
         return -1;
 #else
         cudaError_t status; 
+        int *d_size, h_size; 
 
-        // Memcpy deviceMemoryInstance->size() to host
-        
+        if ((status = cudaMalloc(&d_size, sizeof(int))) != cudaSuccess) {
+            std::cerr << "Could not allocate device size output variable (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        sizeKernel<DeviceMemoryInstance><<<1, 1>>>(this->d_deviceMemoryInstance, d_size);
+
         if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
             std::cerr << "Could not synchronize device (" << 
                 cudaGetErrorString(status) << ").\n";
-            return 0;
+            return -1;
         }
 
-        return 0;
+        if ((status = cudaMemcpy(&h_size, d_size, sizeof(int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+            std::cerr << "Could not copy device memory size to device (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        cudaFree(d_size);
+
+        return h_size;
 #endif
     }
 
     __device__ __host__
-    int edgeWeight(int from, int to) const override {
+    int edgeWeight(const int from, const int to) const override {
 #ifdef __CUDA_ARCH__
         return -1;
 #else
         cudaError_t status; 
+        int *d_weight, h_weight; 
 
-        // Memcpy deviceMemoryInstance->edgeWeight(int from, int to) to host
-        
+        if ((status = cudaMalloc(&d_weight, sizeof(int))) != cudaSuccess) {
+            std::cerr << "Could not allocate device weight output variable (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        edgeWeightKernel<DeviceMemoryInstance><<<1, 1>>>(this->d_deviceMemoryInstance, from, to, d_weight);
+
         if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
             std::cerr << "Could not synchronize device (" << 
                 cudaGetErrorString(status) << ").\n";
-            return 0;
+            return -1;
         }
 
-        return 0;
+        if ((status = cudaMemcpy(&h_weight, d_weight, sizeof(int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+            std::cerr << "Could not copy device memory weight to device (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        cudaFree(d_weight);
+
+        return h_weight;
 #endif
     }
 
     __device__ __host__
-    int hamiltonianCycleWeight(int *cycle) const override {
+    int hamiltonianCycleWeight(const int *cycle) const override {
 #ifdef __CUDA_ARCH__
         return -1;
 #else
         cudaError_t status; 
+        int *d_cycle, *d_weight, h_weight; 
 
-        // Memcpy deviceMemoryInstance->hamiltonianCycleWeight(int *cycle) to host
-        
+        if ((status = cudaMalloc(&d_weight, sizeof(int))) != cudaSuccess) {
+            std::cerr << "Could not allocate device weight output variable (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        if ((status = cudaMalloc(&d_cycle, this->size() * sizeof(int))) != cudaSuccess) {
+            std::cerr << "Could not allocate device cycle variable (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        hamiltonianCycleWeightKernel<DeviceMemoryInstance><<<1, 1>>>(this->d_deviceMemoryInstance, (const int*) d_cycle, d_weight);
+
         if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
             std::cerr << "Could not synchronize device (" << 
                 cudaGetErrorString(status) << ").\n";
-            return 0;
+            return -1;
         }
 
-        return 0;
+        if ((status = cudaMemcpy(&h_weight, d_weight, sizeof(int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+            std::cerr << "Could not copy device memory weight to device (" << 
+                cudaGetErrorString(status) << ").\n";
+            return -1;
+        }
+
+        cudaFree(d_weight);
+        cudaFree(d_cycle);
+
+        return h_weight;
 #endif
     }
 

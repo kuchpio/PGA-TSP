@@ -1,6 +1,6 @@
 #include "HostMemoryInstance.h"
 
-HostMemoryInstance::HostMemoryInstance(float *x, float *y, const IMetric *metric, int size): _size(size) {
+HostMemoryInstance::HostMemoryInstance(const float *x, const float *y, const int size, const IMetric *metric): _size(size) {
     this->_adjecencyMatrix = new int[size * size];
 
     for (int i = 0; i < size; i++) {
@@ -19,7 +19,7 @@ int HostMemoryInstance::size() const {
 #endif
 }
 
-int HostMemoryInstance::edgeWeight(int from, int to) const {
+int HostMemoryInstance::edgeWeight(const int from, const int to) const {
 #ifdef __CUDA_ARCH__
     return -1;
 #else
@@ -27,7 +27,7 @@ int HostMemoryInstance::edgeWeight(int from, int to) const {
 #endif
 }
 
-int HostMemoryInstance::hamiltonianCycleWeight(int *cycle) const {
+int HostMemoryInstance::hamiltonianCycleWeight(const int *cycle) const {
 #ifdef __CUDA_ARCH__
     return -1;
 #else
