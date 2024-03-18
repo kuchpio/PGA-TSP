@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <curand_kernel.h>
 
-__device__ __host__ void RandomSelection::selection(int* drawnChromosome, int* chromosome, int size, int populationSize, curandState* state) const
+__device__ void RandomSelection::selection(int* drawnChromosome, int* chromosome, int size, int populationSize) const
 {
 	float mainChromosomeFitness = calculateFitness(chromosome, size);
 	float drawnChromosomeFitness = calculateFitness(drawnChromosome, size);
