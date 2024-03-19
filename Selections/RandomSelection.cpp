@@ -15,7 +15,7 @@ __device__ void RandomSelection::selection(int* drawnChromosome, int* chromosome
 	}
 }
 
-__device__ void selection(int* drawnChromosome, int* chromosome, int size, int populationSize, float fitness1, float fitness2)
+__device__ void selection(int* drawnChromosome, int* chromosome, int size, float fitness1, float fitness2)
 {
 	if (fitness1 > fitness2)
 	{

@@ -18,7 +18,7 @@ __device__ void shuffleChromosome(int* chromosome, int size, curandState* state)
 	}
 }
 
-__global__ void geneticAlgorithmKernel(int** population, float* distance_matrix, int size, curandState* globalState, int max_iterations) {
+__global__ void geneticAlgorithmKernel(int** population, float** distance_matrix, int size, curandState* globalState, int max_iterations) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int populationSize = blockDim.x * gridDim.x;
 	// Local curand state
@@ -36,7 +36,7 @@ __global__ void geneticAlgorithmKernel(int** population, float* distance_matrix,
 		// Selection
 		// Assuming a simplistic random selection for demonstration
 		int otherIdToSelection = curand(&localState) % populationSize;
-		selection(population[id], population[otherIdToSelection], size, populationSize);
+		selection(population[id], population[otherIdToSelection], size, calculateFitness(population[id], size, distance_matrix), calculateFitness(population[otherIdToSelection], size, distance_matrix));
 
 		__syncthreads(); // Synchronize after selection for crossover
 
@@ -52,9 +52,11 @@ __global__ void geneticAlgorithmKernel(int** population, float* distance_matrix,
 
 		__syncthreads(); // Synchronize after mutation
 	}
+	// Update the global state to ensure randomness continuity
+	globalState[id] = localState;
 }
 
-__global__ void tspGeneticAlgorithmKernel(int** population, float* distance_matrix, float* fitness, int size, int populationSize, curandState* globalState, int max_iterations) {
+__global__ void tspGeneticAlgorithmKernel(int** population, float** distance_matrix, float* fitness, int size, int populationSize, curandState* globalState, int max_iterations) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int populationSize = blockDim.x * gridDim.x;
 	// Local curand state
@@ -66,6 +68,7 @@ __global__ void tspGeneticAlgorithmKernel(int** population, float* distance_matr
 	}
 
 	shuffleChromosome(population[id], size, &localState);
+	fitness[i] = calculateFitness(population[id], size, distance_matrix);
 
 	for (int iteration = 0; iteration < max_iterations; ++iteration) {
 		__syncthreads(); // Synchronize threads before selection
@@ -89,7 +92,7 @@ __global__ void tspGeneticAlgorithmKernel(int** population, float* distance_matr
 		inversionMutation(population[id], size, &localState);
 
 		// Calculate fitness of the new chromosome
-		calculateFitness(population[id], size, distance_matrix);
+		fitness[i] = calculateFitness(population[id], size, distance_matrix);
 
 		__syncthreads(); // Synchronize threads after mutation
 	}

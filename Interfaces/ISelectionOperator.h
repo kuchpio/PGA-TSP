@@ -6,8 +6,15 @@ class ISelectionOperator
 {
 public:
 	virtual void selection(int* drawnChromosome, int* chromosome, int size, int populationSize) const = 0;
-	float calculateFitness(int* chromosome, int size) const {
-		return 0;
-	} // add all edges from tex2D i->j size + 1 edges
 	virtual ~ISelectionOperator() = default;
 };
+
+float calculateFitness(int* chromosome, int size, float** distance_matrix)
+{
+	float sum = distance_matrix[chromosome[size - 1]][chromosome[0]];
+	for (int i = 0; i < size - 1; ++i)
+	{
+		sum += distance_matrix[chromosome[i]][chromosome[i + 1]];
+	}
+	return sum;
+}
