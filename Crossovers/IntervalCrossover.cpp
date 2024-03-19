@@ -29,6 +29,16 @@ __device__ __host__ int* IntervalCrossover::crossover(int* parent1, int* parent2
 	return child;
 }
 
+bool containsVertex(int const* chromosome, int size, int vertex)
+{
+	for (int i = 0; i < size; ++i)
+	{
+		if (chromosome[i] == vertex)
+			return true;
+	}
+	return false;
+}
+
 __device__ int* crossover(int* parent1, int* parent2, int size, curandState* state)
 {
 	int left = curand(state) % (size - 1);

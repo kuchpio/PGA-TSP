@@ -15,11 +15,9 @@ __device__ void RandomSelection::selection(int* drawnChromosome, int* chromosome
 	}
 }
 
-__device__ void selection(int* drawnChromosome, int* chromosome, int size, int populationSize)
+__device__ void selection(int* drawnChromosome, int* chromosome, int size, int populationSize, float fitness1, float fitness2)
 {
-	float mainChromosomeFitness = calculateFitness(chromosome, size);
-	float drawnChromosomeFitness = calculateFitness(drawnChromosome, size);
-	if (mainChromosomeFitness > drawnChromosomeFitness)
+	if (fitness1 > fitness2)
 	{
 		for (int i = 0; i < size; ++i) {
 			chromosome[i] = drawnChromosome[i];

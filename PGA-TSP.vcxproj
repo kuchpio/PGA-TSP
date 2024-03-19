@@ -77,7 +77,6 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="Kernel\Kernel.cu" />
     <CudaCompile Include="main.cpp" />
     <CudaCompile Include="RandomGenerator\RandomGenerator.cu" />
   </ItemGroup>

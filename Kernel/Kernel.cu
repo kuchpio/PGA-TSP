@@ -54,7 +54,7 @@ __global__ void geneticAlgorithmKernel(int** population, float* distance_matrix,
 	}
 }
 
-__global__ void tspGeneticAlgorithm(int** population, float* distance_matrix, int size, curandState* globalState, int max_iterations) {
+__global__ void tspGeneticAlgorithmKernel(int** population, float* distance_matrix, float* fitness, int size, int populationSize, curandState* globalState, int max_iterations) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int populationSize = blockDim.x * gridDim.x;
 	// Local curand state
@@ -67,34 +67,33 @@ __global__ void tspGeneticAlgorithm(int** population, float* distance_matrix, in
 
 	shuffleChromosome(population[id], size, &localState);
 
-
 	for (int iteration = 0; iteration < max_iterations; ++iteration) {
-        __syncthreads(); // Synchronize threads before selection
+		__syncthreads(); // Synchronize threads before selection
 
-        // Selection - using roulette wheel to select an index
-        int selectedIdx = rouletteWheelSelection(fitness, populationSize, &localState);
+		// Selection - using roulette wheel to select an index
+		int selectedIdx = rouletteWheelSelection(fitness, populationSize, &localState);
 
-        // Crossover - Order Crossover (OX)
-        int* parent1 = population[id];
-        int* parent2 = population[selectedIdx];
-        int* child = new int[size]; // Assuming dynamic memory allocation is allowed for illustrative purposes
-        crossover(parent1, parent2, child, size, &localState);
-        for (int i = 0; i < size; ++i) {
-            population[id][i] = child[i]; // Copy the child to the current chromosome
-        }
-        delete[] child; // Clean up dynamically allocated memory
+		// Crossover - Order Crossover (OX)
+		int* parent1 = population[id];
+		int* parent2 = population[selectedIdx];
+		int* child = new int[size]; // Assuming dynamic memory allocation is allowed for illustrative purposes
+		crossover(parent1, parent2, child, size, &localState);
+		for (int i = 0; i < size; ++i) {
+			population[id][i] = child[i]; // Copy the child to the current chromosome
+		}
+		delete[] child; // Clean up dynamically allocated memory
 
-        __syncthreads(); // Synchronize threads before mutation
+		__syncthreads(); // Synchronize threads before mutation
 
-        // Mutation - Inversion Mutation
-        inversionMutation(population[id], size, &localState);
+		// Mutation - Inversion Mutation
+		inversionMutation(population[id], size, &localState);
 
-        // Calculate fitness of the new chromosome
-        // calculateFitness(population[id], size, distance_matrix, &fitness[id]);
+		// Calculate fitness of the new chromosome
+		calculateFitness(population[id], size, distance_matrix);
 
-        __syncthreads(); // Synchronize threads after mutation
-    }
+		__syncthreads(); // Synchronize threads after mutation
+	}
 
-    // Update the global state to ensure randomness continuity
-    globalState[id] = localState;
+	// Update the global state to ensure randomness continuity
+	globalState[id] = localState;
 }
