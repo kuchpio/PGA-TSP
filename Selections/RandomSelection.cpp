@@ -14,3 +14,32 @@ __device__ void RandomSelection::selection(int* drawnChromosome, int* chromosome
 		}
 	}
 }
+
+__device__ void selection(int* drawnChromosome, int* chromosome, int size, int populationSize)
+{
+	float mainChromosomeFitness = calculateFitness(chromosome, size);
+	float drawnChromosomeFitness = calculateFitness(drawnChromosome, size);
+	if (mainChromosomeFitness > drawnChromosomeFitness)
+	{
+		for (int i = 0; i < size; ++i) {
+			chromosome[i] = drawnChromosome[i];
+		}
+	}
+}
+
+__device__ int rouletteWheelSelection(float* fitness, int populationSize, curandState* state) {
+	float totalFitness = 0;
+	for (int i = 0; i < populationSize; ++i) {
+		totalFitness += fitness[i];
+	}
+
+	float slice = curand_uniform(state) * totalFitness;
+	float total = 0;
+	for (int i = 0; i < populationSize; ++i) {
+		total += fitness[i];
+		if (total > slice) {
+			return i;
+		}
+	}
+	return populationSize - 1;
+}

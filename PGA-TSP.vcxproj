@@ -105,6 +105,9 @@
     <Text Include="Kernel\Kernel.cuh" />
     <Text Include="Texture\Texture.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Kernel\Kernel.cu" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.3.targets" />

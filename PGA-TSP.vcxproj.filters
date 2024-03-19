@@ -28,6 +28,9 @@
     <Filter Include="Texture">
       <UniqueIdentifier>{a8699ec9-eb84-4778-ab2b-6d0581626447}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Kernel">
+      <UniqueIdentifier>{d458f993-8a1c-40fa-8491-5baae6228fde}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Interfaces\IMutationOperator.h">
@@ -85,5 +88,13 @@
     <Text Include="Texture\Texture.cpp">
       <Filter>Texture</Filter>
     </Text>
+    <Text Include="Kernel\Kernel.cuh">
+      <Filter>Kernel</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Kernel\Kernel.cu">
+      <Filter>Kernel</Filter>
+    </None>
   </ItemGroup>
 </Project>
