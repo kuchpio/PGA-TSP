@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Crossovers\IntervalCrossover.cpp" />
+    <ClCompile Include="Interfaces\ISelectionOperator.cpp" />
     <ClCompile Include="Metrics\CeilEuclidean2D.cpp" />
     <ClCompile Include="Metrics\Euclidean2D.cpp" />
     <ClCompile Include="Mutations\SwapMutation.cpp" />

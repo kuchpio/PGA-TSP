@@ -5,8 +5,8 @@
 
 __device__ void RandomSelection::selection(int* drawnChromosome, int* chromosome, int size, int populationSize) const
 {
-	float mainChromosomeFitness = calculateFitness(chromosome, size);
-	float drawnChromosomeFitness = calculateFitness(drawnChromosome, size);
+	float mainChromosomeFitness = 0; // calculateFitness(chromosome, size);
+	float drawnChromosomeFitness = 0;// calculateFitness(drawnChromosome, size);
 	if (mainChromosomeFitness > drawnChromosomeFitness)
 	{
 		for (int i = 0; i < size; ++i) {

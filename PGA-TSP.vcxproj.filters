@@ -83,6 +83,9 @@
     <ClCompile Include="Mutations\SwapMutation.cpp">
       <Filter>Mutations</Filter>
     </ClCompile>
+    <ClCompile Include="Interfaces\ISelectionOperator.cpp">
+      <Filter>Selections</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Texture\Texture.cpp">
