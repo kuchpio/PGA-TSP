@@ -89,7 +89,7 @@ __global__ void tspGeneticAlgorithmKernel(int** population, float** distance_mat
 		__syncthreads(); // Synchronize threads before mutation
 
 		// Mutation - Inversion Mutation
-		inversionMutation(population[id], size, &localState);
+		intervalMutate(population[id], size, &localState);
 
 		// Calculate fitness of the new chromosome
 		fitness[i] = calculateFitness(population[id], size, distance_matrix);
