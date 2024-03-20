@@ -31,7 +31,6 @@ __global__ void geneticAlgorithmKernel(int** population, float** distance_matrix
 	}
 
 	shuffleChromosome(population[id], size, &localState);
-
 	fitness[id] = calculateFitness(population[id], size, distance_matrix);
 	__syncthreads();
 
@@ -74,10 +73,9 @@ __global__ void tspGeneticAlgorithmKernel(int** population, float** distance_mat
 
 	shuffleChromosome(population[id], size, &localState);
 	fitness[id] = calculateFitness(population[id], size, distance_matrix);
+	__syncthreads();
 
 	for (int iteration = 0; iteration < max_iterations; ++iteration) {
-		__syncthreads(); // Synchronize threads before selection
-
 		// Selection - using roulette wheel to select an index
 		int selectedIdx = rouletteWheelSelection(fitness, populationSize, &localState);
 
