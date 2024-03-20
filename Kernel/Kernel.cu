@@ -59,7 +59,7 @@ __global__ void geneticAlgorithmKernel(int** population, float** distance_matrix
 	globalState[id] = localState;
 }
 
-__global__ void tspGeneticAlgorithmKernel(int** population, float** distance_matrix, int size, int populationSize, curandState* globalState, int max_iterations) {
+__global__ void tspGeneticAlgorithmKernel(int** population, float** distance_matrix, int size, curandState* globalState, int max_iterations) {
 	__shared__ float fitness[1024];
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	int populationSize = blockDim.x * gridDim.x;
