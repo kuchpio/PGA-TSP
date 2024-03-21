@@ -25,12 +25,7 @@ __device__ void selection(int* drawnChromosome, int* chromosome, int size, float
 	}
 }
 
-__device__ int rouletteWheelSelection(float* fitness, int populationSize, curandState* state) {
-	float totalFitness = 0;
-	for (int i = 0; i < populationSize; ++i) {
-		totalFitness += fitness[i];
-	}
-
+__device__ int rouletteWheelSelection(float* fitness, int populationSize, curandState* state, float totalFitness) {
 	float slice = curand_uniform(state) * totalFitness;
 	float total = 0;
 	for (int i = 0; i < populationSize; ++i) {

@@ -61,7 +61,8 @@ __global__ void geneticAlgorithmKernel(int** population, float** distance_matrix
 
 __global__ void tspGeneticAlgorithmKernel(int** population, float** distance_matrix, int size, curandState* globalState, int max_iterations) {
 	__shared__ float fitness[1024];
-	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	__shared__ float total_fitness[1024];
+	int id = blockIdx.x * blockDim.x + threadIdx.x, tid = threadIdx.x;
 	int populationSize = blockDim.x * gridDim.x;
 	// Local curand state
 	curandState localState = globalState[id];
@@ -76,8 +77,17 @@ __global__ void tspGeneticAlgorithmKernel(int** population, float** distance_mat
 	__syncthreads();
 
 	for (int iteration = 0; iteration < max_iterations; ++iteration) {
+		// Parallel reduction of fitness
+		total_fitness[tid] = fitness[id];
+		for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+			if (tid < stride) {
+				total_fitness[tid] += total_fitness[tid + stride];
+			}
+			__syncthreads();
+		}
+
 		// Selection - using roulette wheel to select an index
-		int selectedIdx = rouletteWheelSelection(fitness, populationSize, &localState);
+		int selectedIdx = rouletteWheelSelection(fitness, populationSize, &localState, total_fitness[0]);
 
 		// Crossover - Order Crossover (OX)
 		int* child = crossover(population[id], population[selectedIdx], size, &localState);
