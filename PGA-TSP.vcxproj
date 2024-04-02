@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Crossovers\IntervalCrossover.cpp" />
+    <ClCompile Include="Interfaces\ISelectionOperator.cpp" />
     <ClCompile Include="Metrics\CeilEuclidean2D.cpp" />
     <ClCompile Include="Metrics\Euclidean2D.cpp" />
     <ClCompile Include="Mutations\SwapMutation.cpp" />
@@ -101,7 +102,11 @@
     <ClInclude Include="Texture\Texture.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="Kernel\Kernel.cuh" />
     <Text Include="Texture\Texture.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Kernel\Kernel.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
