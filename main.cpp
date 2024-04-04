@@ -2,8 +2,7 @@
 #include <iostream>
 #include <numeric>
 #include "Instance/InstanceReader.h"
-#include "Instance/HostInstance.h"
-#include "Instance/HostMemoryInstance.h"
+#include "Instance/GlobalMemoryInstance.h"
 
 void usage(std::string programName) {
     std::cerr << 
@@ -27,7 +26,7 @@ int main(int argc, char *argv[])
         usage(programName);
         return EXIT_FAILURE;
     }
-    InstanceReader instanceReader(input);                                                                                                           
+    tsp::InstanceReader instanceReader(input);                                                                                                           
     input.close();
 
     if (cudaSetDevice(0) != cudaSuccess) {
@@ -35,7 +34,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    const HostInstance<HostMemoryInstance> *hostInstance = instanceReader.createInstance<HostMemoryInstance>();
+    const tsp::IHostInstance *hostInstance = instanceReader.createHostInstance();
+    const tsp::IHostInstance *deviceInstance = instanceReader.createDeviceInstance<tsp::GlobalMemoryInstance>();
 
     int *canonicalCycle = new int[hostInstance->size()];
     std::iota(canonicalCycle, canonicalCycle + hostInstance->size(), 0);
@@ -44,7 +44,11 @@ int main(int argc, char *argv[])
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (host): " << 
         hostInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
+    std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device global memory): " << 
+        deviceInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
+
     delete hostInstance;
+    delete deviceInstance;
     delete[] canonicalCycle;
 
     if (cudaDeviceReset() != cudaSuccess) {

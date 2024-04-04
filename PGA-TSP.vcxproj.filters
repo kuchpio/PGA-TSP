@@ -2,9 +2,7 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <CudaCompile Include="main.cpp" />
-    <CudaCompile Include="RandomGenerator\RandomGenerator.cu">
-      <Filter>RandomGenerator</Filter>
-    </CudaCompile>
+    <CudaCompile Include="RandomGenerator\RandomGenerator.cu" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Interfaces">
@@ -36,15 +34,6 @@
     <ClInclude Include="Interfaces\ISelectionOperator.h">
       <Filter>Interfaces</Filter>
     </ClInclude>
-    <ClInclude Include="Metrics\CeilEuclidean2D.h">
-      <Filter>Metrics</Filter>
-    </ClInclude>
-    <ClInclude Include="Metrics\Euclidean2D.h">
-      <Filter>Metrics</Filter>
-    </ClInclude>
-    <ClInclude Include="Interfaces\IMetric.h">
-      <Filter>Interfaces</Filter>
-    </ClInclude>
     <ClInclude Include="Crossovers\IntervalCrossover.h">
       <Filter>Crossovers</Filter>
     </ClInclude>
@@ -54,9 +43,11 @@
     <ClInclude Include="Mutations\SwapMutation.h">
       <Filter>Mutations</Filter>
     </ClInclude>
-    <ClInclude Include="RandomGenerator\RandomGenerator.cuh">
-      <Filter>RandomGenerator</Filter>
-    </ClInclude>
+    <ClInclude Include="Instance\GlobalMemoryInstance.h" />
+    <ClInclude Include="Instance\HostInstance.h" />
+    <ClInclude Include="Instance\InstanceReader.h" />
+    <ClInclude Include="Instance\Metric.h" />
+    <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Selections\RandomSelection.cpp">
@@ -65,14 +56,12 @@
     <ClCompile Include="Crossovers\IntervalCrossover.cpp">
       <Filter>Crossovers</Filter>
     </ClCompile>
-    <ClCompile Include="Metrics\CeilEuclidean2D.cpp">
-      <Filter>Metrics</Filter>
-    </ClCompile>
-    <ClCompile Include="Metrics\Euclidean2D.cpp">
-      <Filter>Metrics</Filter>
-    </ClCompile>
     <ClCompile Include="Mutations\SwapMutation.cpp">
       <Filter>Mutations</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitignore" />
+    <None Include="Makefile" />
   </ItemGroup>
 </Project>
