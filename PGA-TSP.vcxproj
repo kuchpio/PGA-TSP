@@ -104,6 +104,14 @@
     <ClInclude Include="Mutations\SwapMutation.h" />
     <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
     <ClInclude Include="Selections\RandomSelection.h" />
+    <ClInclude Include="Texture\Texture.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Kernel\Kernel.cuh" />
+    <Text Include="Texture\Texture.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Kernel\Kernel.cu" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
