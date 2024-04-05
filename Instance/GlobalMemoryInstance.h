@@ -46,7 +46,7 @@ namespace tsp {
 		cudaFree(d_x);
 		cudaFree(d_y);
 
-		return { .d_adjecencyMatrix = d_adjecencyMatrix, .size = size };
+		return { d_adjecencyMatrix, size };
 	}
 
 	bool isValid(GlobalMemoryInstance instance) {

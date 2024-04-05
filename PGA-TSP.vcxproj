@@ -13,7 +13,6 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0FB70673-98E6-413E-AA01-2828358EC0F0}</ProjectGuid>
     <RootNamespace>PGA_TSP</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -57,8 +56,6 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <AdditionalOptions>-std=c++20 %(AdditionalOptions)</AdditionalOptions>
-      <GenerateRelocatableDeviceCode>false</GenerateRelocatableDeviceCode>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -79,8 +76,6 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <AdditionalOptions>-std=c++20 %(AdditionalOptions)</AdditionalOptions>
-      <GenerateRelocatableDeviceCode>false</GenerateRelocatableDeviceCode>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -98,17 +93,16 @@
     <ClInclude Include="Instance\HostInstance.h" />
     <ClInclude Include="Instance\InstanceReader.h" />
     <ClInclude Include="Instance\Metric.h" />
+    <ClInclude Include="Instance\TextureMemoryInstance.h" />
     <ClInclude Include="Interfaces\ICrossoverOperator.h" />
     <ClInclude Include="Interfaces\IMutationOperator.h" />
     <ClInclude Include="Interfaces\ISelectionOperator.h" />
     <ClInclude Include="Mutations\SwapMutation.h" />
     <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
     <ClInclude Include="Selections\RandomSelection.h" />
-    <ClInclude Include="Texture\Texture.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Kernel\Kernel.cuh" />
-    <Text Include="Texture\Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Kernel\Kernel.cu" />
