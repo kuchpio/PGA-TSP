@@ -10,6 +10,8 @@
 #include <cuda_runtime_api.h>
 #include <memory>
 
+#include "Helper.h"
+
 namespace tsp {
 
 	typedef struct TextureMemoryInstance {
