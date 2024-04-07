@@ -7,8 +7,8 @@
 namespace tsp {
 
 	typedef struct GlobalMemoryInstance {
-		const int* d_adjecencyMatrix = NULL;
-		const int size = 0;
+		int* d_adjecencyMatrix = NULL;
+		int size = 0;
 	} GlobalMemoryInstance;
 
 	template<class Metric>
@@ -23,56 +23,55 @@ namespace tsp {
 	}
 
 	template <typename Metric>
-	const GlobalMemoryInstance initInstance(const float* x, const float* y, const int size, Metric metric) {
+	bool initInstance(GlobalMemoryInstance *instance, const float* x, const float* y, const int size, Metric metric) {
 		float* d_x, * d_y;
 		int* d_adjecencyMatrix;
 
 		if (cudaMalloc(&d_x, size * sizeof(float)) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMemcpy(d_x, x, size * sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMalloc(&d_y, size * sizeof(float)) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMemcpy(d_y, y, size * sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMalloc(&d_adjecencyMatrix, size * size * sizeof(int)) != cudaSuccess)
-			return { };
+			return false;
 
 		fillAdjecencyMatrixKernel << <4, 256 >> > (d_adjecencyMatrix, d_x, d_y, size, metric);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
-			return { };
+			return false;
 
 		cudaFree(d_x);
 		cudaFree(d_y);
 
-		return { d_adjecencyMatrix, size };
-	}
+		instance->d_adjecencyMatrix = d_adjecencyMatrix;
+		instance->size = size;
 
-	bool isValid(GlobalMemoryInstance instance) {
-		return instance.d_adjecencyMatrix != NULL;
+		return true;
 	}
 
 	void destroyInstance(GlobalMemoryInstance instance) {
 		cudaFree((int*)instance.d_adjecencyMatrix);
 	}
 
-	__device__
-		int size(const GlobalMemoryInstance instance) {
+	__device__ __host__
+	int size(const GlobalMemoryInstance instance) {
 		return instance.size;
 	}
 
 	__device__
-		int edgeWeight(const GlobalMemoryInstance instance, const int from, const int to) {
+	int edgeWeight(const GlobalMemoryInstance instance, const int from, const int to) {
 		return instance.d_adjecencyMatrix[from * size(instance) + to];
 	}
 
 	__device__
-		int hamiltonianCycleWeight(const GlobalMemoryInstance instance, const int* cycle) {
-		int sum = edgeWeight(instance, size(instance) - 1, 0);
+	int hamiltonianCycleWeight(const GlobalMemoryInstance instance, const int* cycle) {
+		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
 
 		for (int i = 0; i < size(instance) - 1; i++) {
-			sum += edgeWeight(instance, i, i + 1);
+			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
 		}
 
 		return sum;

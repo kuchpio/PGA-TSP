@@ -1,5 +1,5 @@
-#ifndef __GLOBAL_MEMORY_INSTANCE_H__
-#define __GLOBAL_MEMORY_INSTANCE_H__
+#ifndef __TEXTURE_MEMORY_INSTANCE_H__
+#define __TEXTURE_MEMORY_INSTANCE_H__
 
 // https://on-demand.gputechconf.com/gtc-express/2011/presentations/texture_webinar_aug_2011.pdf
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#texture-functions
@@ -13,50 +13,39 @@
 namespace tsp {
 
 	typedef struct TextureMemoryInstance {
-		const cudaTextureObject_t textureObject = 0;
-		const cudaArray_t array = NULL;
-		const int size = 0;
+		cudaTextureObject_t textureObject = 0;
+		cudaArray_t array = NULL;
+		int size = 0;
 	} TextureMemoryInstance;
 
-	template<class Metric>
-	__global__
-	void fillAdjecencyMatrixKernel(int* adjecencyMatrix, const float* x, const float* y, const int size, Metric metric) {
-		int tid, row, col;
-		for (tid = blockIdx.x * blockDim.x + threadIdx.x; tid < size * size; tid += blockDim.x * gridDim.x) {
-			row = tid / size;
-			col = tid % size;
-			adjecencyMatrix[tid] = distance(metric, x[row], y[row], x[col], y[col]);
-		}
-	}
-
 	template <typename Metric>
-	const TextureMemoryInstance initInstance(const float* x, const float* y, const int size, Metric metric) {
+	bool initInstance(TextureMemoryInstance *instance, const float* x, const float* y, const int size, Metric metric) {
 		float* d_x, * d_y;
 		int* d_adjecencyMatrix;
 		cudaTextureObject_t textureObject = 0;
 		cudaArray_t array = NULL;
 
 		if (cudaMalloc(&d_x, size * sizeof(float)) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMemcpy(d_x, x, size * sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMalloc(&d_y, size * sizeof(float)) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMemcpy(d_y, y, size * sizeof(float), cudaMemcpyHostToDevice) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMalloc(&d_adjecencyMatrix, size * size * sizeof(int)) != cudaSuccess)
-			return { };
+			return false;
 
 		fillAdjecencyMatrixKernel << <4, 256 >> > (d_adjecencyMatrix, d_x, d_y, size, metric);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
-			return { };
+			return false;
 		
 		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<int>();
 		if (cudaMallocArray(&array, &channelDesc, size, size) != cudaSuccess)
-			return { };
+			return false;
 		if (cudaMemcpy2DToArray(array, 0, 0, d_adjecencyMatrix, size * sizeof(int), size * sizeof(int), size, cudaMemcpyDeviceToDevice) != cudaSuccess)
-			return { };
+			return false;
 
 		struct cudaResourceDesc resDesc;
 		memset(&resDesc, 0, sizeof(resDesc));
@@ -72,17 +61,17 @@ namespace tsp {
 		texDesc.normalizedCoords = 0;
 
 		if (cudaCreateTextureObject(&textureObject, &resDesc, &texDesc, nullptr) != cudaSuccess)
-			return { };
+			return false;
 
 		cudaFree(d_adjecencyMatrix);
 		cudaFree(d_x);
 		cudaFree(d_y);
 
-		return { textureObject, array, size };
-	}
+		instance->textureObject = textureObject;
+		instance->array = array;
+		instance->size = size;
 
-	bool isValid(TextureMemoryInstance instance) {
-		return instance.textureObject != 0;
+		return true;
 	}
 
 	void destroyInstance(TextureMemoryInstance instance) {
@@ -90,7 +79,7 @@ namespace tsp {
 		cudaDestroyTextureObject(instance.textureObject);
 	}
 
-	__device__
+	__device__ __host__
 	int size(const TextureMemoryInstance instance) {
 		return instance.size;
 	}
@@ -102,10 +91,10 @@ namespace tsp {
 
 	__device__
 	int hamiltonianCycleWeight(const TextureMemoryInstance instance, const int* cycle) {
-		int sum = edgeWeight(instance, size(instance) - 1, 0);
+		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
 
 		for (int i = 0; i < size(instance) - 1; i++) {
-			sum += edgeWeight(instance, i, i + 1);
+			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
 		}
 
 		return sum;

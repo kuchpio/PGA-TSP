@@ -81,12 +81,15 @@ namespace tsp {
 
         template<typename Metric>
         DeviceInstanceHostAdapter(const float* x, const float* y, const int size, Metric metric)
-            : _deviceInstance(initInstance(x, y, size, metric)) {
+            : _deviceInstance([x, y, size, metric]() {
+					DeviceInstance deviceInstance;
 
-            if (!isValid(_deviceInstance)) {
-                std::cerr << "Could not initialize device instance.\n";
-            }
-        }
+					if (!initInstance(&deviceInstance, x, y, size, metric)) {
+						std::cerr << "Could not initialize device instance.\n";
+					}
+
+					return deviceInstance;
+                }()) { }
 
         int size() const override {
             cudaError_t status;

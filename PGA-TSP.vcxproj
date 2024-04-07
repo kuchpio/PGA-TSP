@@ -80,32 +80,24 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="main.cpp" />
-    <CudaCompile Include="RandomGenerator\RandomGenerator.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Crossovers\IntervalCrossover.cpp" />
-    <ClCompile Include="Mutations\SwapMutation.cpp" />
-    <ClCompile Include="Selections\RandomSelection.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Crossovers\IntervalCrossover.h" />
+    <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Algorithm\Helper.h" />
+    <ClInclude Include="Crossovers\Basic.h" />
+    <ClInclude Include="Crossovers\Interval.h" />
     <ClInclude Include="Instance\GlobalMemoryInstance.h" />
     <ClInclude Include="Instance\HostInstance.h" />
     <ClInclude Include="Instance\InstanceReader.h" />
     <ClInclude Include="Instance\Metric.h" />
     <ClInclude Include="Instance\TextureMemoryInstance.h" />
-    <ClInclude Include="Interfaces\ICrossoverOperator.h" />
-    <ClInclude Include="Interfaces\IMutationOperator.h" />
-    <ClInclude Include="Interfaces\ISelectionOperator.h" />
-    <ClInclude Include="Mutations\SwapMutation.h" />
-    <ClInclude Include="RandomGenerator\RandomGenerator.cuh" />
-    <ClInclude Include="Selections\RandomSelection.h" />
+    <ClInclude Include="Mutations\Basic.h" />
+    <ClInclude Include="Mutations\Interval.h" />
+    <ClInclude Include="Selections\Basic.h" />
+    <ClInclude Include="Selections\RouleteWheel.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Kernel\Kernel.cuh" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Kernel\Kernel.cu" />
+    <Text Include="Algorithm\Kernels.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />

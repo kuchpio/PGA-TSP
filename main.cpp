@@ -4,6 +4,7 @@
 #include "Instance/InstanceReader.h"
 #include "Instance/TextureMemoryInstance.h"
 #include "Instance/GlobalMemoryInstance.h"
+#include "Algorithm/Basic.h"
 
 void usage(std::string programName) {
     std::cerr << 
@@ -35,9 +36,9 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    const tsp::IHostInstance *hostInstance = instanceReader.createHostInstance();
-    const tsp::IHostInstance *globalMemoryInstance = instanceReader.createDeviceInstance<tsp::TextureMemoryInstance>();
-    const tsp::IHostInstance *textureMemoryInstance = instanceReader.createDeviceInstance<tsp::TextureMemoryInstance>();
+    auto *hostInstance = instanceReader.createHostInstance();
+    auto *globalMemoryInstance = instanceReader.createDeviceInstance<tsp::GlobalMemoryInstance>();
+    auto *textureMemoryInstance = instanceReader.createDeviceInstance<tsp::TextureMemoryInstance>();
 
     int *canonicalCycle = new int[hostInstance->size()];
     std::iota(canonicalCycle, canonicalCycle + hostInstance->size(), 0);
@@ -52,6 +53,10 @@ int main(int argc, char *argv[])
 
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " << 
         textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
+
+    int opt = tsp::solveTSP(globalMemoryInstance->deviceInstance());
+
+    std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";
 
     delete hostInstance;
     delete globalMemoryInstance;
