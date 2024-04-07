@@ -2,9 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <CudaCompile Include="main.cpp" />
-    <CudaCompile Include="RandomGenerator\RandomGenerator.cu">
-      <Filter>RandomGenerator</Filter>
-    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Interfaces">
@@ -33,71 +30,31 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Interfaces\IMutationOperator.h">
-      <Filter>Interfaces</Filter>
-    </ClInclude>
-    <ClInclude Include="Interfaces\ICrossoverOperator.h">
-      <Filter>Interfaces</Filter>
-    </ClInclude>
-    <ClInclude Include="Interfaces\ISelectionOperator.h">
-      <Filter>Interfaces</Filter>
-    </ClInclude>
-    <ClInclude Include="Metrics\CeilEuclidean2D.h">
-      <Filter>Metrics</Filter>
-    </ClInclude>
-    <ClInclude Include="Metrics\Euclidean2D.h">
-      <Filter>Metrics</Filter>
-    </ClInclude>
-    <ClInclude Include="Interfaces\IMetric.h">
-      <Filter>Interfaces</Filter>
-    </ClInclude>
-    <ClInclude Include="Crossovers\IntervalCrossover.h">
+    <ClInclude Include="Crossovers\Interval.h">
       <Filter>Crossovers</Filter>
     </ClInclude>
-    <ClInclude Include="Selections\RandomSelection.h">
+    <ClInclude Include="Selections\Basic.h">
       <Filter>Selections</Filter>
     </ClInclude>
-    <ClInclude Include="Mutations\SwapMutation.h">
+    <ClInclude Include="Mutations\Interval.h">
       <Filter>Mutations</Filter>
     </ClInclude>
-    <ClInclude Include="RandomGenerator\RandomGenerator.cuh">
-      <Filter>RandomGenerator</Filter>
-    </ClInclude>
-    <ClInclude Include="Texture\Texture.h">
-      <Filter>Texture</Filter>
-    </ClInclude>
+    <ClInclude Include="Instance\GlobalMemoryInstance.h" />
+    <ClInclude Include="Instance\HostInstance.h" />
+    <ClInclude Include="Instance\InstanceReader.h" />
+    <ClInclude Include="Instance\Metric.h" />
+    <ClInclude Include="Algorithm\Helper.h" />
+    <ClInclude Include="Instance\TextureMemoryInstance.h" />
+    <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Selections\RouleteWheel.h" />
+    <ClInclude Include="Mutations\Basic.h" />
+    <ClInclude Include="Crossovers\Basic.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Selections\RandomSelection.cpp">
-      <Filter>Selections</Filter>
-    </ClCompile>
-    <ClCompile Include="Crossovers\IntervalCrossover.cpp">
-      <Filter>Crossovers</Filter>
-    </ClCompile>
-    <ClCompile Include="Metrics\CeilEuclidean2D.cpp">
-      <Filter>Metrics</Filter>
-    </ClCompile>
-    <ClCompile Include="Metrics\Euclidean2D.cpp">
-      <Filter>Metrics</Filter>
-    </ClCompile>
-    <ClCompile Include="Mutations\SwapMutation.cpp">
-      <Filter>Mutations</Filter>
-    </ClCompile>
-    <ClCompile Include="Interfaces\ISelectionOperator.cpp">
-      <Filter>Selections</Filter>
-    </ClCompile>
+    <Text Include="Algorithm\Kernels.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Texture\Texture.cpp">
-      <Filter>Texture</Filter>
-    </Text>
-    <Text Include="Kernel\Kernel.cuh">
-      <Filter>Kernel</Filter>
-    </Text>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Kernel\Kernel.cu">
-      <Filter>Kernel</Filter>
-    </None>
+    <None Include=".gitignore" />
+    <None Include="Makefile" />
   </ItemGroup>
 </Project>
