@@ -5,6 +5,7 @@
 #include <sstream>
 #include <map>
 #include <iostream>
+#include <algorithm>
 
 #include "HostInstance.h"
 #include "Metric.h"
