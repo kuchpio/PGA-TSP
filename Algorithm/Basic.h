@@ -8,6 +8,7 @@
 
 #include "Helper.h"
 #include "../Selections/Basic.h"
+#include "../Crossovers/Basic.h"
 #include "../Mutations/Basic.h"
 
 namespace tsp {
@@ -37,8 +38,7 @@ namespace tsp {
 			// Crossover
 			__syncthreads();
 			int crossoverParentTid = curand(&localState) % blockDim.x + blockIdx.x * blockDim.x;
-			select(chromosome, population + crossoverParentTid * instanceSize, result, 
-				instanceSize, fitness[tid], fitness[selectionCandidateTid]);
+			crossover(chromosome, population + crossoverParentTid * instanceSize, result, instanceSize, &localState);
 			__syncthreads();
 			for (int i = 0; i < instanceSize; i++) 
 				chromosome[i] = result[i];
