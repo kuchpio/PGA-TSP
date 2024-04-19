@@ -114,6 +114,77 @@ namespace tsp {
 		globalState[tid] = localState;
 		delete[] result;
 	}
+
+	template <typename Instance>
+	__global__ void tspElitistGeneticAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
+		__shared__ int sharedFitness[256];
+		__shared__ int sharedIndexes[256];
+		__shared__ int totalFitness[256];
+		int tid = blockIdx.x * blockDim.x + threadIdx.x;
+		int bid = threadIdx.x;
+		int instanceSize = size(instance);
+		curandState localState = globalState[tid];
+		int* chromosome = population + tid * instanceSize;
+		int* result = new int[instanceSize];
+
+		initChromosome(chromosome, instanceSize, &localState);
+		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+		__syncthreads();
+
+		for (int iteration = 0; iteration < maxIterations; ++iteration) {
+			sharedFitness[bid] = fitness[tid];
+			sharedIndexes[bid] = bid;
+			totalFitness[bid] = fitness[tid];
+			__syncthreads();
+			for (int stride = blockDim.x >> 2; stride > 0; stride >>= 1) {
+				if (bid < stride) {
+					if (sharedFitness[bid] < sharedFitness[bid + stride]) {
+						sharedFitness[bid] = sharedFitness[bid + stride];
+						sharedIndexes[bid] = sharedIndexes[bid + stride];
+					}
+					totalFitness[bid] += totalFitness[bid + stride];
+				}
+				__syncthreads();
+			}
+			__syncthreads();
+			// Selection
+			int selectedIdx = rouletteWheelSelection(fitness, blockDim.x * gridDim.x, &localState, totalFitness[0]);
+			__syncthreads();
+
+			if (bid != sharedIndexes[0])
+			{
+				if (fitness[tid] > fitness[selectedIdx])
+				{
+					crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
+				}
+				else
+				{
+					crossover(population + selectedIdx * instanceSize, chromosome, result, instanceSize, &localState);
+				}
+			}
+
+			__syncthreads();
+
+			if (bid != sharedIndexes[0])
+			{
+				for (int i = 0; i < instanceSize; ++i) {
+					chromosome[i] = result[i];
+				}
+			}
+			__syncthreads();
+
+			// Mutation
+			if (curand_uniform(&localState) > 0.9 && bid != sharedIndexes[0]) { // 10% chance of mutation
+				mutate(chromosome, instanceSize, &localState);
+			}
+			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+			__syncthreads();
+		}
+
+		__syncthreads();
+		globalState[tid] = localState;
+		delete[] result;
+	}
 }
 
 #endif

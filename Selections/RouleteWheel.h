@@ -9,7 +9,7 @@ namespace tsp {
 		int rouletteWheelSelection(int* fitness, int populationSize, curandState* state, float totalFitness) {
 		int slice = (int)(curand_uniform(state) * totalFitness);
 		int total = 0;
-		for (int i = 0; i < populationSize; ++i) {
+		for (int i = blockDim.x * blockIdx.x; i < blockDim.x * (blockIdx.x + 1); ++i) {
 			total += fitness[i];
 			if (total > slice) {
 				return i;

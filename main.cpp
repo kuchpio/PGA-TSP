@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
 	std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " <<
 		textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
-	int opt = tsp::solveTSP2(globalMemoryInstance->deviceInstance());
+	int opt = tsp::solveTSP3(globalMemoryInstance->deviceInstance());
 
 	std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";
 
