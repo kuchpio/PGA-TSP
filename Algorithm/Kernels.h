@@ -15,27 +15,24 @@
 namespace tsp {
 	template <typename Instance>
 	__global__ void geneticAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
-		__shared__ int totalFitness[1024];
+		__shared__ int totalFitness[256];
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
+		int bid = threadIdx.x;
 		int instanceSize = size(instance);
 		curandState localState = globalState[tid];
 		int* chromosome = population + tid * instanceSize;
-
-		// Initialize chromosome with a sequence from 0 to size - 1
-		for (int i = 0; i < instanceSize; ++i) {
-			chromosome[i] = i;
-		}
 
 		initChromosome(chromosome, instanceSize, &localState);
 		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
 		__syncthreads();
 
-		// Run the genetic algorithm for a fixed number of iterations
+		int* result = new int[instanceSize];
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
-			totalFitness[tid] = fitness[tid];
+			totalFitness[bid] = fitness[tid];
+			__syncthreads();
 			for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-				if (tid < stride) {
-					totalFitness[tid] += totalFitness[tid + stride];
+				if (bid < stride) {
+					totalFitness[bid] += totalFitness[bid + stride];
 				}
 				__syncthreads();
 			}
@@ -45,27 +42,27 @@ namespace tsp {
 			int otherIdToSelection = curand(&localState) % instanceSize;
 			int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
 
-			__syncthreads(); // Synchronize after selection for crossover
-			// Crossover - Order Crossover (OX)
-			int* child = intervalCrossover(chromosome, population + selectedIdx * instanceSize, instanceSize, &localState);
+			//// Crossover - Order Crossover (OX)
+			__syncthreads();
+			// Crossover
+			//int* child = intervalCrossover(chromosome, population + selectedIdx * instanceSize, instanceSize, &localState);
+			crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, fitness[tid], fitness[selectedIdx]);
+
 			__syncthreads();
 			for (int i = 0; i < instanceSize; ++i) {
-				chromosome[i] = child[i];
+				chromosome[i] = result[i];
 			}
-			delete[] child;
 			__syncthreads();
 
 			// Mutation
-			int mutatePossible = curand(&localState) % 10;
-			if (mutatePossible >= 8)
-			{
-				intervalMutate(chromosome, instanceSize, &localState);
+			if (curand_uniform(&localState) > 0.9) { // 10% chance of mutation
+				mutate(chromosome, instanceSize, &localState);
 			}
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
-			__syncthreads(); // Synchronize after mutation
 		}
-		// Update the global state to ensure randomness continuity
+
 		globalState[tid] = localState;
+		delete[] result;
 	}
 
 	template <typename Instance>
@@ -76,25 +73,18 @@ namespace tsp {
 		int* chromosome = population + tid * instanceSize;
 		int* result = new int[instanceSize];
 
-		// Initialize chromosome with a sequence from 0 to size - 1
-		for (int i = 0; i < instanceSize; ++i) {
-			chromosome[i] = i;
-		}
-
 		initChromosome(chromosome, instanceSize, &localState);
 		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
 		__syncthreads();
 
-		// Run the genetic algorithm for a fixed number of iterations
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Selection
-			// Assuming a simplistic random selection for demonstration
-			int otherIdToSelection = curand(&localState) % instanceSize;
-			select(chromosome, population + otherIdToSelection * instanceSize, result,
-				instanceSize, fitness[tid], fitness[otherIdToSelection]);
-			__syncthreads(); // Synchronize after selection for crossover
-			// Crossover - Order Crossover (OX)
-			crossover(chromosome, population + otherIdToSelection * instanceSize, result, instanceSize, &localState);
+			int selectedIdx = curand(&localState) % instanceSize;
+			select(chromosome, population + selectedIdx * instanceSize, result,
+				instanceSize, fitness[tid], fitness[selectedIdx]);
+			__syncthreads();
+			// Crossover
+			crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, fitness[tid], fitness[selectedIdx]);
 			__syncthreads();
 			for (int i = 0; i < instanceSize; ++i) {
 				chromosome[i] = result[i];
@@ -102,15 +92,13 @@ namespace tsp {
 			__syncthreads();
 
 			// Mutation
-			int mutatePossible = curand(&localState) % 10;
-			if (mutatePossible >= 8)
-			{
+			if (curand_uniform(&localState) > 0.9) { // 10% chance of mutation
 				mutate(chromosome, instanceSize, &localState);
 			}
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
 			__syncthreads(); // Synchronize after mutation
 		}
-		// Update the global state to ensure randomness continuity
+
 		globalState[tid] = localState;
 		delete[] result;
 	}
@@ -150,17 +138,10 @@ namespace tsp {
 			// Selection
 			int selectedIdx = rouletteWheelSelection(fitness, blockDim.x * gridDim.x, &localState, totalFitness[0]);
 			__syncthreads();
-
+			// Crossover
 			if (bid != sharedIndexes[0])
 			{
-				if (fitness[tid] > fitness[selectedIdx])
-				{
-					crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
-				}
-				else
-				{
-					crossover(population + selectedIdx * instanceSize, chromosome, result, instanceSize, &localState);
-				}
+				crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, fitness[tid], fitness[selectedIdx]);
 			}
 
 			__syncthreads();
