@@ -12,8 +12,9 @@
 
 #include "Helper.h"
 
-namespace tsp {
+#define MAX_DISTANCE_CAN 1000000
 
+namespace tsp {
 	typedef struct TextureMemoryInstance {
 		cudaTextureObject_t textureObject = 0;
 		cudaArray_t array = NULL;
@@ -21,7 +22,7 @@ namespace tsp {
 	} TextureMemoryInstance;
 
 	template <typename Metric>
-	bool initInstance(TextureMemoryInstance *instance, const float* x, const float* y, const int size, Metric metric) {
+	bool initInstance(TextureMemoryInstance* instance, const float* x, const float* y, const int size, Metric metric) {
 		float* d_x, * d_y;
 		int* d_adjecencyMatrix;
 		cudaTextureObject_t textureObject = 0;
@@ -42,7 +43,7 @@ namespace tsp {
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return false;
-		
+
 		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<int>();
 		if (cudaMallocArray(&array, &channelDesc, size, size) != cudaSuccess)
 			return false;
@@ -82,26 +83,25 @@ namespace tsp {
 	}
 
 	__device__ __host__
-	int size(const TextureMemoryInstance instance) {
+		int size(const TextureMemoryInstance instance) {
 		return instance.size;
 	}
 
 	__device__
-	int edgeWeight(const TextureMemoryInstance instance, const int from, const int to) {
+		int edgeWeight(const TextureMemoryInstance instance, const int from, const int to) {
 		return tex2D<int>(instance.textureObject, from, to);
 	}
 
 	__device__
-	int hamiltonianCycleWeight(const TextureMemoryInstance instance, const int* cycle) {
+		int hamiltonianCycleWeight(const TextureMemoryInstance instance, const int* cycle) {
 		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
 
 		for (int i = 0; i < size(instance) - 1; i++) {
 			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
 		}
 
-		return sum;
+		return MAX_DISTANCE_CAN - sum;
 	}
-
 }
 
 #endif

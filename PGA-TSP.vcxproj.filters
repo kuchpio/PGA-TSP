@@ -52,6 +52,7 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
+    <Text Include="berlin52.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
