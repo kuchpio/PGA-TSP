@@ -3,6 +3,10 @@
   "Id": "0fb70673-98e6-413e-aa01-2828358ec0f0",
   "Items": [
     {
+      "Id": "61bf8c29-eb0e-442d-b72a-4a8a34ac8cc5",
+      "Command": "berlin52.tsp"
+    },
+    {
       "Id": "5d729b5c-b18b-4f36-b9b0-1aaa45be3056",
       "Command": "pcb442.tsp"
     }

@@ -4,7 +4,7 @@
 #include "Instance/InstanceReader.h"
 #include "Instance/TextureMemoryInstance.h"
 #include "Instance/GlobalMemoryInstance.h"
-#include "Algorithm/Basic.h"
+#include "Algorithm/FineGrained.h"
 
 void usage(std::string programName) {
     std::cerr << 
@@ -54,9 +54,9 @@ int main(int argc, char *argv[])
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " << 
         textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
-    int opt = tsp::solveTSP(globalMemoryInstance->deviceInstance());
+    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), 4, 10, 10, 100);
 
-    std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";
+    std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
 
     delete hostInstance;
     delete globalMemoryInstance;
