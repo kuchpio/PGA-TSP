@@ -54,7 +54,16 @@ int main(int argc, char *argv[])
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " << 
         textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
-    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), 4, 10, 10, 100);
+    tsp::IslandGeneticAlgorithmOptions options = {
+        4,      // .islandCount
+        32,     // .islandPopulationSize
+        10,     // .isolatedIterationCount
+        10,     // .migrationCount
+        0.5,    // .crossoverProbability
+		0.5,    // .mutationProbability
+		true    // .elitism
+    };
+    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, 100);
 
     std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
 
