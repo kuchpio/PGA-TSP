@@ -1,5 +1,5 @@
-#ifndef __BASIC_CROSSOVER_H__
-#define __BASIC_CROSSOVER_H__
+#ifndef __PMX_CROSSOVER_H__
+#define __PMX_CROSSOVER_H__
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -7,38 +7,58 @@
 namespace tsp {
 	// Partially Mapped Crossover (PMX)
 	__device__
-		void PMX(const int* parent1, const int* parent2, int* offspring1, int* offspring2, const int size, curandState* state) {
-		int cutPoint1 = curand(state) % size;
-		int cutPoint2 = curand(state) % size;
+		void PMX(int* a, int* b, const int size, curandState* state) {
+		int left = curand(state) % size;
+		int right = curand(state) % size;
 
-		if (cutPoint1 > cutPoint2) {
-			int temp = cutPoint1;
-			cutPoint1 = cutPoint2;
-			cutPoint2 = temp;
+		if (left > right) {
+			int tmp = left;
+			left = right;
+			right = tmp;
 		}
-
-		// Copy the segments between cut points
-		for (int i = cutPoint1; i <= cutPoint2; i++) {
-			offspring1[i] = parent2[i];
-			offspring2[i] = parent1[i];
+		int* c = new int[size];
+		int* d = new int[size];
+		for (int i = 0; i < size; i++)
+		{
+			c[i] = a[i];
+			d[i] = b[i];
 		}
-
-		// Mapping remainder elements outside the cut points
-		for (int i = 0; i < size; i++) {
-			if (i < cutPoint1 || i > cutPoint2) {
-				offspring1[i] = parent1[i];
-				offspring2[i] = parent2[i];
-			}
-			// Resolve conflicts
-			for (int j = cutPoint1; j <= cutPoint2; j++) {
-				if (offspring1[i] == offspring1[j] && i != j) {
-					offspring1[i] = parent2[i];
+		int tmp;
+		for (int i = left; i <= right; i++)
+		{
+			bool done0 = false;
+			bool done1 = false;
+			for (int j = 0; j < size; j++)
+			{
+				done0 = false;
+				done1 = false;
+				if (c[j] == b[i])
+				{
+					done0 = true;
+					c[j] = c[i];
 				}
-				if (offspring2[i] == offspring2[j] && i != j) {
-					offspring2[i] = parent1[i];
+				if (d[j] == a[i])
+				{
+					done1 = true;
+					d[j] = d[i];
 				}
+				if (done0 && done1) break;
 			}
 		}
+		for (int i = 0; i < size; i++)
+		{
+			if ((i >= left) && (i <= right)) {
+				tmp = a[i];
+				a[i] = b[i];
+				b[i] = tmp;
+			}
+			else {
+				a[i] = c[i];
+				b[i] = d[i];
+			}
+		}
+		delete[] c;
+		delete[] d;
 	}
 }
 
