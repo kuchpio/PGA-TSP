@@ -49,6 +49,8 @@
     <ClInclude Include="Selections\RouleteWheel.h" />
     <ClInclude Include="Mutations\Basic.h" />
     <ClInclude Include="Crossovers\Basic.h" />
+    <ClInclude Include="Crossovers\PMX.h" />
+    <ClInclude Include="Algorithm\VectorReduction.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
