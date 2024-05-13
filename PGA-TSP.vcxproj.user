@@ -8,7 +8,7 @@
     <RemoteDebuggerCommandArguments>pcb442.tsp</RemoteDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>berlin52.tsp</LocalDebuggerCommandArguments>
-    <RemoteDebuggerCommandArguments>berlin52.tsp</RemoteDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>pcb442.tsp</LocalDebuggerCommandArguments>
+    <RemoteDebuggerCommandArguments>pcb442.tsp</RemoteDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

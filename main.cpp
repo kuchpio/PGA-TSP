@@ -55,8 +55,8 @@ int main(int argc, char *argv[])
         textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
     tsp::IslandGeneticAlgorithmOptions options = {
-        4,      // .islandCount
-        1000,     // .islandPopulationSize
+        8,      // .islandCount
+        1500,     // .islandPopulationSize
         10,     // .isolatedIterationCount
         10,     // .migrationCount
         0.5,    // .crossoverProbability
