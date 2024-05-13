@@ -84,6 +84,7 @@
   <ItemGroup>
     <ClInclude Include="Algorithm\Basic.h" />
     <ClInclude Include="Algorithm\Helper.h" />
+    <ClInclude Include="Algorithm\VectorReduction.h" />
     <ClInclude Include="Crossovers\Basic.h" />
     <ClInclude Include="Crossovers\Interval.h" />
     <ClInclude Include="Crossovers\PMX.h" />

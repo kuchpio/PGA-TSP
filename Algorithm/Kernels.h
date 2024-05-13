@@ -12,6 +12,7 @@
 #include "../Selections/RouleteWheel.h"
 #include "../Mutations/Basic.h"
 #include "../Mutations/Interval.h"
+#include "./VectorReduction.h"
 
 namespace tsp {
 	template <typename Instance>
@@ -29,14 +30,8 @@ namespace tsp {
 
 		int* result = new int[instanceSize];
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
-			totalFitness[bid] = fitness[tid];
-			__syncthreads();
-			for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-				if (bid < stride) {
-					totalFitness[bid] += totalFitness[bid + stride];
-				}
-				__syncthreads();
-			}
+			// Vector Reduction
+			SumVector(totalFitness, fitness);
 
 			// Selection
 			// Assuming a simplistic random selection for demonstration
@@ -120,21 +115,8 @@ namespace tsp {
 		__syncthreads();
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
-			sharedFitness[bid] = fitness[tid];
-			sharedIndexes[bid] = bid;
-			totalFitness[bid] = fitness[tid];
-			__syncthreads();
-			for (int stride = blockDim.x >> 2; stride > 0; stride >>= 1) {
-				if (bid < stride) {
-					if (sharedFitness[bid] < sharedFitness[bid + stride]) {
-						sharedFitness[bid] = sharedFitness[bid + stride];
-						sharedIndexes[bid] = sharedIndexes[bid + stride];
-					}
-					totalFitness[bid] += totalFitness[bid + stride];
-				}
-				__syncthreads();
-			}
-			__syncthreads();
+			// Vector Reduction
+			SumAndGetMaxVector(totalFitness, fitness, sharedFitness, sharedIndexes);
 			// Selection
 			int selectedIdx = rouletteWheelSelection(fitness, blockDim.x * gridDim.x, &localState, totalFitness[0]);
 			__syncthreads();
@@ -186,14 +168,9 @@ namespace tsp {
 		__syncthreads();
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
-			totalFitness[bid] = fitness[tid] + fitness[tid + 1];
-			__syncthreads();
-			for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-				if (bid < stride) {
-					totalFitness[bid] += totalFitness[bid + stride];
-				}
-				__syncthreads();
-			}
+			// Vector Reduction
+			SumVector(totalFitness, fitness);
+
 			// Selection
 			for (int i = 0; i < 2; ++i) {
 				flags[i] = false;
@@ -201,7 +178,6 @@ namespace tsp {
 				if (fitness[selectedIdx] > fitness[tid + i])
 				{
 					flags[i] = true;
-					//printf("a [%d] ---- %d %d %d\n", tid, fitness[selectedIdx], fitness[tid + i], selectedIdx);
 					int* betterChromosome = population + selectedIdx * instanceSize;
 					for (int j = 0; j < instanceSize; ++j) {
 						result[i][j] = betterChromosome[j];
