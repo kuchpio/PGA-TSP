@@ -323,8 +323,75 @@ namespace tsp {
 			dstChromosome[i] = srcChromosome[i];
 	}
 
+	__device__ __forceinline__ float createRoulletteWheel(unsigned int islandBestIndex, unsigned int islandWorstIndex, unsigned int islandPopulationSize, unsigned int *cycleWeight, float *roulletteWheelThreshold) {
+		float *reducedRoulletteWheelThresholdSum = roulletteWheelThreshold + islandPopulationSize;
+
+		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
+
+		unsigned int min = cycleWeight[islandBestIndex];
+		unsigned int max = cycleWeight[islandWorstIndex];
+
+		float intervalWidthSum = 0.0f;
+		for (unsigned int baseOffset = blockWid * WARP_SIZE; baseOffset < islandPopulationSize; baseOffset += blockDim.x) {
+			float intervalWidth = 0.0f, intervalWidthShfl;
+			if (baseOffset + lid < islandPopulationSize)
+				intervalWidth = min == max ? 1.0f : ((float)(max - cycleWeight[baseOffset + lid])) / ((float)(max - min));
+
+			// Warp scan to get partial prefix sums
+			for (unsigned int i = 1; i < WARP_SIZE; i *= 2) {
+				intervalWidthShfl = __shfl_up_sync(FULL_MASK, intervalWidth, i);
+				if (lid >= i) intervalWidth += intervalWidthShfl;
+			}
+
+			if (baseOffset + lid < islandPopulationSize)
+				roulletteWheelThreshold[baseOffset + lid] = intervalWidth;
+
+			if (lid == WARP_SIZE - 1)
+				intervalWidthSum += intervalWidth;
+		}
+
+		if (lid == WARP_SIZE - 1) {
+			reducedRoulletteWheelThresholdSum[blockWid] = intervalWidthSum;
+		}
+
+		__syncthreads();
+
+		if (blockWid == 0) {
+			intervalWidthSum = reducedRoulletteWheelThresholdSum[lid];
+			for (unsigned int i = 1; i < WARP_SIZE; i *= 2) 
+				intervalWidthSum += __shfl_xor_sync(FULL_MASK, intervalWidthSum, i);
+			reducedRoulletteWheelThresholdSum[lid] = intervalWidthSum;
+		}
+
+		__syncthreads();
+
+		return reducedRoulletteWheelThresholdSum[0];
+	}
+	
+	__device__ __forceinline__ unsigned int selectIndex(curandState *localState, float *roulletteWheelThreshold, float maxThreshold, unsigned int islandPopulationSize) {
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
+
+		float rnd;
+		if (lid == 0) rnd = curand_uniform(localState) * maxThreshold;
+		rnd = __shfl_sync(FULL_MASK, rnd, 0);
+
+		for (unsigned int baseOffset = 0; baseOffset < islandPopulationSize; baseOffset += WARP_SIZE) {
+
+			float threshold = baseOffset + lid < islandPopulationSize ? 
+				roulletteWheelThreshold[baseOffset + lid] : roulletteWheelThreshold[islandPopulationSize - 1];
+
+			unsigned int thresholdLid = __clz(~(__ballot_sync(FULL_MASK, rnd <= threshold)));
+			if (thresholdLid) return baseOffset + WARP_SIZE - thresholdLid;
+
+			rnd -= __shfl_sync(FULL_MASK, threshold, WARP_SIZE - 1);
+		}
+		
+		return islandPopulationSize - 1; // Unreachable
+	}
+
 	template <typename Instance, typename gene>
-	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, unsigned int iterationCount, gene* population, unsigned int islandPopulationSize, unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) {
+	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, unsigned int iterationCount, gene* population, unsigned int islandPopulationSize, bool elitism, unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) {
 		extern __shared__ unsigned int s_buffer[];
 		unsigned int *s_reducedMin = s_buffer;
 		unsigned int *s_reducedMinIndex = s_reducedMin + WARP_SIZE;
@@ -333,7 +400,6 @@ namespace tsp {
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
 		unsigned int* s_islandBestWorstIndex = s_cycleWeight + islandPopulationSize;
 		float *s_roulletteWheelThreshold = (float*)(s_islandBestWorstIndex + 2);
-		float *s_roulletteWheelThresholdSums = s_roulletteWheelThreshold + islandPopulationSize;
 
 		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
 		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
@@ -353,65 +419,18 @@ namespace tsp {
 
 		while (iterationCount-- > 0) {
 
+			unsigned int islandBestIndex = s_islandBestWorstIndex[0];
+			unsigned int islandWorstIndex = s_islandBestWorstIndex[1];
+
 			// Selection
 			{
-				unsigned int min = s_cycleWeight[s_islandBestWorstIndex[0]];
-				unsigned int max = s_cycleWeight[s_islandBestWorstIndex[1]];
-
-				float intervalWidthSum = 0.0f;
-				for (unsigned int baseOffset = blockWid * WARP_SIZE; baseOffset < islandPopulationSize; baseOffset += blockDim.x) {
-					float intervalWidth = 0.0f, intervalWidthShfl;
-					if (baseOffset + lid < islandPopulationSize)
-						intervalWidth = min == max ? 1.0f : ((float)(max - s_cycleWeight[baseOffset + lid])) / ((float)(max - min));
-
-					// Warp scan to get partial prefix sums
-					for (unsigned int i = 1; i < WARP_SIZE; i *= 2) {
-						intervalWidthShfl = __shfl_up_sync(FULL_MASK, intervalWidth, i);
-						if (lid >= i) intervalWidth += intervalWidthShfl;
-					}
-
-					if (baseOffset + lid < islandPopulationSize)
-						s_roulletteWheelThreshold[baseOffset + lid] = intervalWidth;
-
-					if (lid == WARP_SIZE - 1)
-						intervalWidthSum += intervalWidth;
-				}
-
-				if (lid == WARP_SIZE - 1) {
-					s_roulletteWheelThresholdSums[blockWid] = intervalWidthSum;
-				}
-
-				__syncthreads();
-
-				if (blockWid == 0) {
-					intervalWidthSum = s_roulletteWheelThresholdSums[lid];
-					for (unsigned int i = 1; i < WARP_SIZE; i *= 2) 
-						intervalWidthSum += __shfl_xor_sync(FULL_MASK, intervalWidthSum, i);
-					s_roulletteWheelThresholdSums[lid] = intervalWidthSum;
-				}
-
-				__syncthreads();
-
-				float maxThreshold = s_roulletteWheelThresholdSums[0];
+				float maxThreshold = createRoulletteWheel(islandBestIndex, islandWorstIndex, islandPopulationSize, s_cycleWeight, s_roulletteWheelThreshold);
 
 				for (unsigned int chromosomeIndex = blockWid; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x >> 5)) {
 
 					// Select lane id based on roullette wheel selection
-					float rnd;
-					if (lid == 0) rnd = curand_uniform(globalState + tid) * maxThreshold;
-					rnd = __shfl_sync(FULL_MASK, rnd, 0);
-
-					unsigned int selectedIndex;
-					for (unsigned int baseOffset = 0; baseOffset < islandPopulationSize; baseOffset += WARP_SIZE) {
-						float threshold = baseOffset + lid < islandPopulationSize ? 
-							s_roulletteWheelThreshold[baseOffset + lid] : s_roulletteWheelThreshold[islandPopulationSize - 1];
-						unsigned int thresholdLid = __clz(~(__ballot_sync(FULL_MASK, rnd <= threshold)));
-						if (thresholdLid) {
-							selectedIndex = baseOffset + WARP_SIZE - thresholdLid;
-							break;
-						}
-						rnd -= __shfl_sync(FULL_MASK, threshold, WARP_SIZE - 1);
-					}
+					unsigned int selectedIndex = elitism && chromosomeIndex == islandBestIndex ? chromosomeIndex : 
+						selectIndex(globalState + tid, s_roulletteWheelThreshold, maxThreshold, islandPopulationSize);
 
 					// Copy selected chromosome
 					gene* srcChromosome = population + nWarpSizeAligned *
@@ -607,7 +626,7 @@ namespace tsp {
 			);
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
-				instance, d_globalState, options.isolatedIterationCount, d_population, options.islandPopulationSize, d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
+				instance, d_globalState, options.isolatedIterationCount, d_population, options.islandPopulationSize, options.elitism, d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 			);
 
 			if (cudaDeviceSynchronize() != cudaSuccess)

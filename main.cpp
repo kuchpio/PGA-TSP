@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     tsp::IslandGeneticAlgorithmOptions options = {
         8,      // .islandCount
         1500,     // .islandPopulationSize
-        10,     // .isolatedIterationCount
+        10000,     // .isolatedIterationCount
         10,     // .migrationCount
         0.5,    // .crossoverProbability
 		0.5,    // .mutationProbability
