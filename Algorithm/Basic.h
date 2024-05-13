@@ -107,7 +107,7 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 1000000);
+		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -141,7 +141,7 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 1000000);
+		tspGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -176,7 +176,41 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspElitistGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 1000000);
+		tspElitistGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
+
+		if (cudaDeviceSynchronize() != cudaSuccess)
+			return -1;
+
+		auto fitnessPtr = thrust::device_pointer_cast(d_fitness);
+		int opt = MAX_DISTANCE_CAN - *thrust::max_element(fitnessPtr, fitnessPtr + blockSize * gridSize);
+		cudaFree(d_fitness);
+		cudaFree(d_population);
+		cudaFree(d_globalState);
+
+		return opt;
+	}
+
+	template <typename Instance>
+	int solveTSP5(const Instance instance) {
+		const int blockSize = 256, gridSize = 4;
+		int* d_fitness, * d_population;
+		curandState* d_globalState;
+
+		if (cudaMalloc(&d_fitness, blockSize * gridSize * sizeof(int)) != cudaSuccess)
+			return -1;
+
+		if (cudaMalloc(&d_population, blockSize * gridSize * size(instance) * sizeof(int)) != cudaSuccess)
+			return -1;
+
+		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
+			return -1;
+
+		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+
+		if (cudaDeviceSynchronize() != cudaSuccess)
+			return -1;
+
+		tspPMXAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, 1000);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;

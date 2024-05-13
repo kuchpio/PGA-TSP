@@ -8,6 +8,7 @@
 #include "Helper.h"
 #include "../Selections/Basic.h"
 #include "../Crossovers/Interval.h"
+#include "../Crossovers/PMX.h"
 #include "../Selections/RouleteWheel.h"
 #include "../Mutations/Basic.h"
 #include "../Mutations/Interval.h"
@@ -39,7 +40,6 @@ namespace tsp {
 
 			// Selection
 			// Assuming a simplistic random selection for demonstration
-			int otherIdToSelection = curand(&localState) % instanceSize;
 			int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
 
 			//// Crossover - Order Crossover (OX)
@@ -165,6 +165,74 @@ namespace tsp {
 		__syncthreads();
 		globalState[tid] = localState;
 		delete[] result;
+	}
+
+	template <typename Instance>
+	__global__ void tspPMXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
+		__shared__ int totalFitness[128];
+		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+		int bid = threadIdx.x;
+		int instanceSize = size(instance);
+		curandState localState = globalState[tid];
+		int* chromosome[2] = { population + tid * instanceSize, population + (tid + 1) * instanceSize };
+		int* result[2];
+		result[0] = new int[instanceSize];
+		result[1] = new int[instanceSize];
+		bool flags[] = { false, false };
+		for (int i = 0; i < 2; ++i) {
+			initChromosome(chromosome[i], instanceSize, &localState);
+			fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+		}
+		__syncthreads();
+
+		for (int iteration = 0; iteration < maxIterations; ++iteration) {
+			totalFitness[bid] = fitness[tid] + fitness[tid + 1];
+			__syncthreads();
+			for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+				if (bid < stride) {
+					totalFitness[bid] += totalFitness[bid + stride];
+				}
+				__syncthreads();
+			}
+			// Selection
+			for (int i = 0; i < 2; ++i) {
+				flags[i] = false;
+				int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
+				if (fitness[selectedIdx] > fitness[tid + i])
+				{
+					flags[i] = true;
+					//printf("a [%d] ---- %d %d %d\n", tid, fitness[selectedIdx], fitness[tid + i], selectedIdx);
+					int* betterChromosome = population + selectedIdx * instanceSize;
+					for (int j = 0; j < instanceSize; ++j) {
+						result[i][j] = betterChromosome[j];
+					}
+				}
+			}
+			__syncthreads();
+			for (int i = 0; i < instanceSize; ++i) {
+				if (flags[0])
+					chromosome[0][i] = result[0][i];
+				if (flags[1])
+					chromosome[1][i] = result[1][i];
+			}
+			__syncthreads();
+			// Crossover
+			PMX(chromosome[0], chromosome[1], instanceSize, &localState);
+			__syncthreads();
+			// Mutation
+			for (int i = 0; i < 2; ++i) {
+				if (curand_uniform(&localState) > 0.7) { // 10% chance of mutation
+					mutate(chromosome[i], instanceSize, &localState);
+				}
+				fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+			}
+			__syncthreads(); // Synchronize after mutation
+		}
+
+		globalState[tid] = localState;
+		globalState[tid + 1] = localState;
+		delete[] result[0];
+		delete[] result[1];
 	}
 }
 
