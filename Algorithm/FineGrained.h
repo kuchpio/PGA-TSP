@@ -358,6 +358,8 @@ namespace tsp {
 				unsigned int min = s_cycleWeight[s_islandBestWorstIndex[0]];
 				unsigned int max = s_cycleWeight[s_islandBestWorstIndex[1]];
 
+#ifdef PARALLEL
+
 				float intervalWidthSum = 0.0f;
 				for (unsigned int baseOffset = blockWid * WARP_SIZE; baseOffset < islandPopulationSize; baseOffset += blockDim.x) {
 					float intervalWidth = 0.0f, intervalWidthShfl;
@@ -389,6 +391,26 @@ namespace tsp {
 						intervalWidthSum += __shfl_xor_sync(FULL_MASK, intervalWidthSum, i);
 					s_roulletteWheelThresholdSums[lid] = intervalWidthSum;
 				}
+
+#else
+
+				if (threadIdx.x == 0) {
+					float sum = 0.0f;
+					unsigned int chromosomeIndex = 0;
+					while (chromosomeIndex < islandPopulationSize) {
+						float intervalWidth = min == max ? 1.0f : ((float)(max - s_cycleWeight[chromosomeIndex])) / ((float)(max - min));
+						sum += intervalWidth;
+						s_roulletteWheelThreshold[chromosomeIndex++] = intervalWidth;
+						for (unsigned int i = 1; i < WARP_SIZE && chromosomeIndex < islandPopulationSize; i++, chromosomeIndex++) {
+							intervalWidth = min == max ? 1.0f : ((float)(max - s_cycleWeight[chromosomeIndex])) / ((float)(max - min));
+							sum += intervalWidth;
+							s_roulletteWheelThreshold[chromosomeIndex] = s_roulletteWheelThreshold[chromosomeIndex - 1] + intervalWidth;
+						}
+					}
+					s_roulletteWheelThresholdSums[0] = sum;
+				}
+
+#endif // PARALLEL
 
 				__syncthreads();
 
