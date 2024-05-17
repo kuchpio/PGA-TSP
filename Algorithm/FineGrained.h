@@ -85,44 +85,132 @@ namespace tsp {
 		return sum;
 	}
 
-	__device__ __forceinline__ int findMin(int current, int index) {
-		int currentShuf, indexShuf;
-		for (int i = 1; i < WARP_SIZE; i *= 2) {
-			currentShuf = __shfl_xor_sync(FULL_MASK, current, i);
-			indexShuf = __shfl_xor_sync(FULL_MASK, index, i);
-			if (current > currentShuf) {
-				index = indexShuf;
-				current = currentShuf;
-			}
-		}
-		return index;
-	}
-
-	__device__ __forceinline__ int findMax(int current, int index) {
-		int currentShuf, indexShuf;
-		for (int i = 1; i < WARP_SIZE; i *= 2) {
-			currentShuf = __shfl_xor_sync(FULL_MASK, current, i);
-			indexShuf = __shfl_xor_sync(FULL_MASK, index, i);
-			if (current < currentShuf) {
-				index = indexShuf;
-				current = currentShuf;
-			}
-		}
-		return index;
-	}
-
 	__global__ void setupCurand(curandState* globalState, int seed) {
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		curand_init(seed, tid, 0, globalState + tid);
 	}
 
+	template <bool reduceMin = true, bool reduceMax = true>
+	__device__ __forceinline__ void findMinMax(unsigned int* array, unsigned int arraySize, unsigned int* reductionBuffer, unsigned int minIndex, unsigned int maxIndex, unsigned int *minIndexOutput, unsigned int *maxIndexOutput) {
+		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
+
+		unsigned int* reducedMin, * reducedMinIndex, * reducedMax, * reducedMaxIndex;
+		unsigned int min, max;
+
+		if (reduceMin) {
+			reducedMin = reductionBuffer;
+			reducedMinIndex = reducedMin + WARP_SIZE;
+			min = 0xffffffff;
+			minIndex = threadIdx.x;
+		}
+		if (reduceMax) {
+			reducedMax = reductionBuffer + (reduceMin ? 2 * WARP_SIZE : 0);
+			reducedMaxIndex = reducedMax +  WARP_SIZE;
+			max = 0;
+			maxIndex = threadIdx.x;
+		}
+
+		// 1. Block stride loop thread reduction and output writing
+		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < arraySize; chromosomeIndex += blockDim.x) {
+			unsigned int value = array[chromosomeIndex];
+			if (reduceMin && min > value) {
+				min = value;
+				minIndex = chromosomeIndex;
+			}
+			if (reduceMax && max < value) {
+				max = value;
+				maxIndex = chromosomeIndex;
+			}
+		}
+
+		// 2. Warp reduction in each warp
+		unsigned int minShuf, minIndexShuf, maxShuf, maxIndexShuf;
+		for (int i = 1; i < WARP_SIZE; i *= 2) {
+
+			if (reduceMin) {
+				minShuf = __shfl_xor_sync(FULL_MASK, min, i);
+				minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
+				if (min > minShuf) {
+					minIndex = minIndexShuf;
+					min = minShuf;
+				}
+			}
+
+			if (reduceMax) {
+				maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
+				maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
+				if (max < maxShuf) {
+					maxIndex = maxIndexShuf;
+					max = maxShuf;
+				}
+			}
+
+		}
+
+		if (lid == 0) {
+			if (reduceMin) {
+				reducedMin[blockWid] = min;
+				reducedMinIndex[blockWid] = minIndex;
+			}
+			if (reduceMax) {
+				reducedMax[blockWid] = max;
+				reducedMaxIndex[blockWid] = maxIndex;
+			}
+		}
+
+		__syncthreads();
+
+		// 3. Warp reduction of reduced results
+		if (blockWid == 0) {
+
+			if (reduceMin) {
+				min = reducedMin[lid];
+				minIndex = reducedMinIndex[lid];
+			}
+			if (reduceMax) {
+				max = reducedMax[lid];
+				maxIndex = reducedMaxIndex[lid];
+			}
+
+			for (int i = 1; i < WARP_SIZE; i *= 2) {
+
+				if (reduceMin) {
+					minShuf = __shfl_xor_sync(FULL_MASK, min, i);
+					minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
+					if (min > minShuf) {
+						minIndex = minIndexShuf;
+						min = minShuf;
+					}
+				}
+
+				if (reduceMax) {
+					maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
+					maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
+					if (max < maxShuf) {
+						maxIndex = maxIndexShuf;
+						max = maxShuf;
+					}
+				}
+
+			}
+
+			if (lid == 0) {
+				if (minIndex == maxIndex) {
+					*minIndexOutput = 0;
+					*maxIndexOutput = arraySize - 1;
+				} else {
+					*minIndexOutput = minIndex;
+					*maxIndexOutput = maxIndex;
+				}
+			}
+		}
+	}
+
 	template <typename Instance, typename gene>
 	__global__ void initializationKernel(const Instance instance, curandState* globalState, gene* population, unsigned int islandPopulationSize, unsigned int* cycleWeight, unsigned int* islandBest, unsigned int* islandWorst) {
 		extern __shared__ unsigned int s_buffer[];
-		unsigned int *s_reducedMin = s_buffer;
-		unsigned int *s_reducedMinIndex = s_reducedMin + WARP_SIZE;
-		unsigned int *s_reducedMax = s_reducedMinIndex + WARP_SIZE;
-		unsigned int *s_reducedMaxIndex = s_reducedMax + WARP_SIZE;
+		unsigned int* s_reductionBuffer = s_buffer;
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
 
 		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
@@ -142,99 +230,16 @@ namespace tsp {
 
 		__syncthreads();
 
-		// 1. Block stride loop thread reduction and output writing
-		unsigned int min = 0xffffffff, minIndex = threadIdx.x, max = 0, maxIndex = threadIdx.x;
-		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x) {
+		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x)
+			cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex] = s_cycleWeight[chromosomeIndex];
 
-			unsigned int value = s_cycleWeight[chromosomeIndex];
-			if (min > value) {
-				min = value;
-				minIndex = chromosomeIndex;
-			}
-			if (max < value) {
-				max = value;
-				maxIndex = chromosomeIndex;
-			}
-
-			cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex] = value;
-		}
-
-		// 2. Warp reduction in each warp
-		unsigned int minShuf, minIndexShuf, maxShuf, maxIndexShuf;
-		for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-			minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-			minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-			if (min > minShuf) {
-				minIndex = minIndexShuf;
-				min = minShuf;
-			}
-
-			maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-			maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-			if (max < maxShuf) {
-				maxIndex = maxIndexShuf;
-				max = maxShuf;
-			}
-
-		}
-
-		if (lid == 0) {
-			s_reducedMin[blockWid] = min;
-			s_reducedMinIndex[blockWid] = minIndex;
-			s_reducedMax[blockWid] = max;
-			s_reducedMaxIndex[blockWid] = maxIndex;
-		}
-
-		__syncthreads();
-
-		// 3. Warp reduction of reduced results
-		if (blockWid == 0) {
-
-			min = s_reducedMin[lid];
-			minIndex = s_reducedMinIndex[lid];
-			max = s_reducedMax[lid];
-			maxIndex = s_reducedMaxIndex[lid];
-
-			for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-				minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-				minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-				if (min > minShuf) {
-					minIndex = minIndexShuf;
-					min = minShuf;
-				}
-
-				maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-				maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-				if (max < maxShuf) {
-					maxIndex = maxIndexShuf;
-					max = maxShuf;
-				}
-
-			}
-
-			if (lid == 0) {
-				if (minIndex == maxIndex) {
-					islandBest[blockIdx.x] = 0;
-					islandWorst[blockIdx.x] = islandPopulationSize - 1;
-				} else {
-					islandBest[blockIdx.x] = minIndex;
-					islandWorst[blockIdx.x] = maxIndex;
-				}
-			}
-		}
+		findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, islandBest + blockIdx.x, islandWorst + blockIdx.x);
 	}
 
 	template <typename gene>
 	__global__ void migrationKernel(gene* population, unsigned int islandPopulationSize, unsigned int nWarpSizeAligned, unsigned int *cycleWeight, unsigned int* islandBest, unsigned int* islandWorst, bool *sourceInSecondBuffer) {
 		__shared__ gene *s_srcDst[2];
-		__shared__ unsigned int s_reducedMax[WARP_SIZE];
-		__shared__ unsigned int s_reducedMaxIndex[WARP_SIZE];
-
-		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
-		unsigned int blockWid = (tid >> 5) & (WARP_SIZE - 1);		// Block warp id
-		unsigned int lid = tid & (WARP_SIZE - 1);					// Warp thread id
+		__shared__ unsigned int s_reductionBuffer[2 * WARP_SIZE];
 
 		unsigned int thisIsland = blockIdx.x;
 		unsigned int nextIsland = (blockIdx.x + 1) % gridDim.x;
@@ -264,54 +269,7 @@ namespace tsp {
 
 		__syncthreads();
 
-		unsigned int max = 0, maxIndex = threadIdx.x;
-		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x) {
-			unsigned int value = cycleWeight[thisIsland * islandPopulationSize + chromosomeIndex];
-			if (max < value) {
-				max = value;
-				maxIndex = chromosomeIndex;
-			}
-		}
-
-		unsigned int maxShuf, maxIndexShuf;
-		for (int i = 1; i < WARP_SIZE; i *= 2) {
-			maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-			maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-			if (max < maxShuf) {
-				maxIndex = maxIndexShuf;
-				max = maxShuf;
-			}
-		}
-
-		if (lid == 0) {
-			s_reducedMax[blockWid] = max;
-			s_reducedMaxIndex[blockWid] = maxIndex;
-		}
-
-		__syncthreads();
-
-		if (blockWid == 0) {
-			max = s_reducedMax[lid];
-			maxIndex = s_reducedMaxIndex[lid];
-			for (int i = 1; i < WARP_SIZE; i *= 2) {
-				maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-				maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-				if (max < maxShuf) {
-					maxIndex = maxIndexShuf;
-					max = maxShuf;
-				}
-			}
-
-			if (lid == 0) {
-				if (minIndex == maxIndex) {
-					islandBest[thisIsland] = 0;
-					islandWorst[thisIsland] = islandPopulationSize - 1;
-				} else {
-					islandBest[thisIsland] = minIndex;
-					islandWorst[thisIsland] = maxIndex;
-				}
-			}
-		}
+		findMinMax<false, true>(cycleWeight, islandPopulationSize, s_reductionBuffer, minIndex, threadIdx.x, islandBest + thisIsland, islandWorst + thisIsland);
 
 		__syncthreads();
 
@@ -393,10 +351,7 @@ namespace tsp {
 	template <typename Instance, typename gene>
 	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, unsigned int iterationCount, gene* population, unsigned int islandPopulationSize, bool elitism, unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) {
 		extern __shared__ unsigned int s_buffer[];
-		unsigned int *s_reducedMin = s_buffer;
-		unsigned int *s_reducedMinIndex = s_reducedMin + WARP_SIZE;
-		unsigned int *s_reducedMax = s_reducedMinIndex + WARP_SIZE;
-		unsigned int *s_reducedMaxIndex = s_reducedMax + WARP_SIZE;
+		unsigned int* s_reductionBuffer = s_buffer;
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
 		unsigned int* s_islandBestWorstIndex = s_cycleWeight + islandPopulationSize;
 		float *s_roulletteWheelThreshold = (float*)(s_islandBestWorstIndex + 2);
@@ -463,80 +418,7 @@ namespace tsp {
 			__syncthreads();
 
 			// Best and Worst
-			// 1. Block stride loop thread reduction and output writing
-			{
-				unsigned int min = 0xffffffff, minIndex = threadIdx.x, max = 0, maxIndex = threadIdx.x;
-				for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x) {
-					unsigned int value = s_cycleWeight[chromosomeIndex];
-					if (min > value) {
-						min = value;
-						minIndex = chromosomeIndex;
-					}
-					if (max < value) {
-						max = value;
-						maxIndex = chromosomeIndex;
-					}
-				}
-
-				// 2. Warp reduction in each warp
-				unsigned int minShuf, minIndexShuf, maxShuf, maxIndexShuf;
-				for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-					minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-					minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-					if (min > minShuf) {
-						minIndex = minIndexShuf;
-						min = minShuf;
-					}
-
-					maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-					maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-					if (max < maxShuf) {
-						maxIndex = maxIndexShuf;
-						max = maxShuf;
-					}
-
-				}
-
-				if (lid == 0) {
-					s_reducedMin[blockWid] = min;
-					s_reducedMinIndex[blockWid] = minIndex;
-					s_reducedMax[blockWid] = max;
-					s_reducedMaxIndex[blockWid] = maxIndex;
-				}
-
-				__syncthreads();
-
-				// 3. Warp reduction of reduced results
-				if (blockWid == 0) {
-
-					min = s_reducedMin[lid];
-					minIndex = s_reducedMinIndex[lid];
-					max = s_reducedMax[lid];
-					maxIndex = s_reducedMaxIndex[lid];
-
-					for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-						minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-						minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-						if (min > minShuf) {
-							minIndex = minIndexShuf;
-							min = minShuf;
-						}
-
-						maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-						maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-						if (max < maxShuf) {
-							maxIndex = maxIndexShuf;
-							max = maxShuf;
-						}
-
-					}
-
-					s_islandBestWorstIndex[0] = minIndex;
-					s_islandBestWorstIndex[1] = maxIndex;
-				}
-			}
+			findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, s_islandBestWorstIndex, s_islandBestWorstIndex + 1);
 
 			__syncthreads();
 

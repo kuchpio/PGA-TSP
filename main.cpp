@@ -56,14 +56,14 @@ int main(int argc, char *argv[])
 
     tsp::IslandGeneticAlgorithmOptions options = {
         8,      // .islandCount
-        1500,     // .islandPopulationSize
-        10000,     // .isolatedIterationCount
+        100,     // .islandPopulationSize
+        10,     // .isolatedIterationCount
         10,     // .migrationCount
         0.5,    // .crossoverProbability
 		0.5,    // .mutationProbability
 		true    // .elitism
     };
-    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, 32, 100);
+    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, 32, 101);
 
     std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
 
