@@ -210,7 +210,7 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspPMXAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, 1000);
+		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, 10000);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
