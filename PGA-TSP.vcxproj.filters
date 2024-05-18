@@ -50,6 +50,7 @@
     <ClInclude Include="Mutations\Basic.h" />
     <ClInclude Include="Crossovers\Basic.h" />
     <ClInclude Include="Algorithm\FineGrained.h" />
+    <ClInclude Include="Mutations\WarpInterval.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />

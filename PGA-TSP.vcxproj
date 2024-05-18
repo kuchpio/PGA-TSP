@@ -96,6 +96,7 @@
     <ClInclude Include="Instance\TextureMemoryInstance.h" />
     <ClInclude Include="Mutations\Basic.h" />
     <ClInclude Include="Mutations\Interval.h" />
+    <ClInclude Include="Mutations\WarpInterval.h" />
     <ClInclude Include="Selections\Basic.h" />
     <ClInclude Include="Selections\RouleteWheel.h" />
   </ItemGroup>

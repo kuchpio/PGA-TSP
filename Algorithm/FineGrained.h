@@ -5,6 +5,8 @@
 #include <device_launch_parameters.h>
 #include <curand_kernel.h>
 
+#include "../Mutations/WarpInterval.h"
+
 #define WARP_SIZE 32
 #define FULL_MASK 0xffffffff
 
@@ -349,7 +351,7 @@ namespace tsp {
 	}
 
 	template <typename Instance, typename gene>
-	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, unsigned int iterationCount, gene* population, unsigned int islandPopulationSize, bool elitism, unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) {
+	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, unsigned int iterationCount, gene* population, unsigned int islandPopulationSize, bool elitism, float mutationProbability, unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) {
 		extern __shared__ unsigned int s_buffer[];
 		unsigned int* s_reductionBuffer = s_buffer;
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
@@ -404,13 +406,18 @@ namespace tsp {
 
 			// Crossover
 
-			// Mutation
-
-			// Fitness
 			for (unsigned int chromosomeIndex = blockWid; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x >> 5)) {
 				gene* chromosome = population + nWarpSizeAligned * 
 					(blockIdx.x * 2 * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + chromosomeIndex);
 
+				// Mutation
+				bool mutation = false;
+				if (lid == 0 && mutationProbability > curand_uniform(globalState + tid)) mutation = true;
+				if (__shfl_sync(FULL_MASK, mutation, 0)) {
+					mutate(chromosome, size(instance), globalState + tid);
+				}
+
+				// Fitness
 				unsigned int thisCycleWeight = calculateCycleWeight(chromosome, instance);
 				if (lid == 0) s_cycleWeight[chromosomeIndex] = thisCycleWeight;
 			}
@@ -508,7 +515,7 @@ namespace tsp {
 			);
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
-				instance, d_globalState, options.isolatedIterationCount, d_population, options.islandPopulationSize, options.elitism, d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
+				instance, d_globalState, options.isolatedIterationCount, d_population, options.islandPopulationSize, options.elitism, options.mutationProbability, d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 			);
 
 			if (cudaDeviceSynchronize() != cudaSuccess)
