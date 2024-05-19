@@ -214,10 +214,18 @@ namespace tsp {
 	template <typename Instance>
 	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
 		__shared__ int totalFitness[128];
+		__shared__ int sharedFitness[128];
 		__shared__ int commonRandomStep;
+		__shared__ int counter;
+		int prevFitness = 0;
+		const int MAX_ITER = 5000;
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
-		int k = 1;
+		int k = 2;
+		if (bid == 0)
+		{
+			counter = 0;
+		}
 		int instanceSize = size(instance);
 		curandState localState = globalState[tid];
 		int* chromosome[2] = { population + tid * instanceSize, population + (tid + 1) * instanceSize };
@@ -233,7 +241,20 @@ namespace tsp {
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
-			SumVectorForChromosomes(totalFitness, fitness);
+			SumVectorForChromosomes(totalFitness, fitness, sharedFitness);
+			if (counter == MAX_ITER)
+			{
+				break;
+			}
+			else if (bid == 0)
+			{
+				if (prevFitness == sharedFitness[0])
+					++counter;
+				else
+					counter = 0;
+				prevFitness = sharedFitness[0];
+			}
+			__syncthreads();
 			// Selection
 			for (int i = 0; i < 2; ++i) {
 				flags[i] = false;
