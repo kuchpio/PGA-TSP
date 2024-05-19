@@ -217,7 +217,7 @@ namespace tsp {
 		__shared__ int commonRandomStep;
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
-		int k = 10;
+		int k = 1;
 		int instanceSize = size(instance);
 		curandState localState = globalState[tid];
 		int* chromosome[2] = { population + tid * instanceSize, population + (tid + 1) * instanceSize };
@@ -264,7 +264,6 @@ namespace tsp {
 				if (curand_uniform(&localState) > 0.7) { // 10% chance of mutation
 					mutate(chromosome[i], instanceSize, &localState);
 				}
-				fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
 			}
 			__syncthreads(); // Synchronize after mutation
 			if ((iteration + 1) % k == 0) {
@@ -272,9 +271,12 @@ namespace tsp {
 					commonRandomStep = curand(&localState) % 128;
 				}
 				__syncthreads();
-				int newIndx = (tid + 1 + commonRandomStep * 2) % 256;
+				int newIndx = blockDim.x * blockIdx.x * 2 + 1 + (tid + (commonRandomStep * 2) % 256) % (blockDim.x * 2);
 				chromosome[1] = population + newIndx * instanceSize;
 			}
+			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
+			fitness[tid + 1] = hamiltonianCycleWeight(instance, chromosome[1]);
+			__syncthreads();
 		}
 
 		globalState[tid] = localState;
