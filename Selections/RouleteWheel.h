@@ -17,6 +17,18 @@ namespace tsp {
 		}
 		return populationSize - 1;
 	}
+	__device__
+		int rouletteWheelSelectionForChromosomes(int* fitness, int populationSize, curandState* state, float totalFitness) {
+		int slice = (int)(curand_uniform(state) * totalFitness);
+		int total = 0;
+		for (int i = blockDim.x * blockIdx.x * 2; i < blockDim.x * (blockIdx.x + 1) * 2; ++i) {
+			total += fitness[i];
+			if (total > slice) {
+				return i;
+			}
+		}
+		return populationSize - 1;
+	}
 }
 
 #endif

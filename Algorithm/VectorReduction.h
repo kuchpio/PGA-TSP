@@ -7,6 +7,21 @@
 
 namespace tsp
 {
+	__device__ void SumVectorForChromosomes(int* totalFitness, int* fitness)
+	{
+		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+		int bid = threadIdx.x;
+		totalFitness[bid] = fitness[tid] + fitness[tid + 1];
+		__syncthreads();
+		for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+			if (bid < stride) {
+				totalFitness[bid] += totalFitness[bid + stride];
+			}
+			__syncthreads();
+		}
+		__syncthreads();
+	}
+
 	__device__ void SumVector(int* totalFitness, int* fitness)
 	{
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;

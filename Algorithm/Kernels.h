@@ -233,12 +233,11 @@ namespace tsp {
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
-			SumVector(totalFitness, fitness);
-
+			SumVectorForChromosomes(totalFitness, fitness);
 			// Selection
 			for (int i = 0; i < 2; ++i) {
 				flags[i] = false;
-				int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
+				int selectedIdx = rouletteWheelSelectionForChromosomes(fitness, instanceSize, &localState, totalFitness[0]);
 				if (fitness[selectedIdx] > fitness[tid + i])
 				{
 					flags[i] = true;
@@ -271,7 +270,8 @@ namespace tsp {
 					commonRandomStep = curand(&localState) % 128;
 				}
 				__syncthreads();
-				int newIndx = blockDim.x * blockIdx.x * 2 + 1 + (tid + (commonRandomStep * 2) % 256) % (blockDim.x * 2);
+				int newIndx = blockDim.x * blockIdx.x * 2 + ((bid + commonRandomStep) * 2 + 1) % (blockDim.x * 2);
+
 				chromosome[1] = population + newIndx * instanceSize;
 			}
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
