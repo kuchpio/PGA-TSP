@@ -1,4 +1,4 @@
-﻿#include <fstream>
+#include <fstream>
 #include <iostream>
 #include <numeric>
 #include "Instance/InstanceReader.h"
@@ -54,23 +54,46 @@ int main(int argc, char *argv[])
     std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " << 
         textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
 
+
+    unsigned short *optimalCycle = new unsigned short[globalMemoryInstance->size()];
     tsp::IslandGeneticAlgorithmOptions options = {
         8,      // .islandCount
         100,     // .islandPopulationSize
-        10,     // .isolatedIterationCount
+        100,     // .isolatedIterationCount
         10,     // .migrationCount
-        0.5,    // .crossoverProbability
-		0.5,    // .mutationProbability
+        0.5f,    // .crossoverProbability
+		0.7f,    // .mutationProbability
 		true    // .elitism
     };
-    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, 32, 101);
+    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 32, 101, true);
 
     std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
+
+    // Verification
+    {
+        unsigned int n = globalMemoryInstance->size();
+        bool* visited = new bool[n] { false };
+        unsigned int verifiedCycleWeight = hostInstance->edgeWeight(optimalCycle[n - 1], optimalCycle[0]);
+        visited[optimalCycle[n - 1]] = true;
+
+		for (int i = 0; i < n - 1; i++) {
+            if (visited[optimalCycle[i]]) {
+                std::cout << "Vertex " << optimalCycle[i] << " repeated.\n";
+            }
+			verifiedCycleWeight += hostInstance->edgeWeight(optimalCycle[i], optimalCycle[i + 1]);
+            visited[optimalCycle[i]] = true;
+		}
+
+        std::cout << "\n\nOptimal hamiltonian cycle length verified: " << verifiedCycleWeight << "\n";
+
+        delete[] visited;
+    }
 
     delete hostInstance;
     delete globalMemoryInstance;
     delete textureMemoryInstance;
     delete[] canonicalCycle;
+    delete[] optimalCycle;
 
     if (cudaDeviceReset() != cudaSuccess) {
         std::cerr << "Could not reset device. \n";
