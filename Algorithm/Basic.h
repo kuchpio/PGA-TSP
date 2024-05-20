@@ -1,5 +1,7 @@
 #ifndef __ALGORITHM_BASIC_H__
 #define __ALGORITHM_BASIC_H__
+#define MAX_ITER 50000
+#define SEED 100
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -67,12 +69,12 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		solveTSPBasicKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 5000);
+		solveTSPBasicKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -102,12 +104,12 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
+		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -136,12 +138,12 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
+		tspGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -171,12 +173,12 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspElitistGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, 100);
+		tspElitistGeneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
@@ -205,12 +207,12 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		setupCurand << <gridSize, blockSize >> > (d_globalState, 100);
+		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, 1000);
+		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;

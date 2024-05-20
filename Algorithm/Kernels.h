@@ -218,10 +218,11 @@ namespace tsp {
 		__shared__ int commonRandomStep;
 		__shared__ int counter;
 		int prevFitness = 0;
-		const int MAX_ITER = 5000;
+		const int MAX_ITER_STOP = 100000;
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
 		int k = 2;
+		bool flag = false;
 		if (bid == 0)
 		{
 			counter = 0;
@@ -242,7 +243,7 @@ namespace tsp {
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
 			SumVectorForChromosomes(totalFitness, fitness, sharedFitness);
-			if (counter == MAX_ITER)
+			if (counter == MAX_ITER_STOP)
 			{
 				break;
 			}
@@ -281,12 +282,13 @@ namespace tsp {
 			__syncthreads();
 			// Mutation
 			for (int i = 0; i < 2; ++i) {
-				if (curand_uniform(&localState) > 0.7) { // 10% chance of mutation
+				if (curand_uniform(&localState) > 0.7) { 
 					mutate(chromosome[i], instanceSize, &localState);
 				}
 			}
-			__syncthreads(); // Synchronize after mutation
-			if ((iteration + 1) % k == 0) {
+			__syncthreads(); 
+			if ((iteration + 1) % k == 0)
+			{
 				if (bid == 0) {
 					commonRandomStep = curand(&localState) % 128;
 				}
@@ -294,7 +296,20 @@ namespace tsp {
 				int newIndx = blockDim.x * blockIdx.x * 2 + ((bid + commonRandomStep) * 2 + 1) % (blockDim.x * 2);
 
 				chromosome[1] = population + newIndx * instanceSize;
+				if (!flag)
+				{
+					flag = !flag;
+					chromosome[0] = population + newIndx * instanceSize;
+					chromosome[1] = population + tid * instanceSize;
+				}
+				else
+				{
+					flag = !flag;
+					chromosome[1] = population + newIndx * instanceSize;
+					chromosome[0] = population + tid * instanceSize;
+				}
 			}
+			
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
 			fitness[tid + 1] = hamiltonianCycleWeight(instance, chromosome[1]);
 			__syncthreads();
