@@ -21,6 +21,7 @@ namespace tsp {
 		float crossoverProbability;
 		float mutationProbability;
 		bool elitism;
+		unsigned int maxStableMigrationCount;
 	};
 
 	template <typename vertex>
@@ -486,6 +487,29 @@ namespace tsp {
 		}
 	}
 
+	void updateStableMigrationCount(unsigned int &stableMigrationCount, unsigned int stableBestCycleWeight, 
+		const unsigned int *h_cycleWeight, const unsigned int *h_islandBest, unsigned int islandCount, unsigned int islandPopulationSize) 
+	{
+		bool stable = true;
+		unsigned int firstBestCycleWeight = h_cycleWeight[h_islandBest[0]];
+		for (unsigned int i = 1; i < islandCount; i++) {
+			if (firstBestCycleWeight != h_cycleWeight[i * islandPopulationSize + h_islandBest[i]]) {
+				stable = false;
+				break;
+			}
+		}
+		if (stable) {
+			if (firstBestCycleWeight != stableBestCycleWeight) {
+				stableMigrationCount = firstBestCycleWeight;
+				stableMigrationCount = 0;
+			}
+			stableMigrationCount++;
+		} else {
+			stableBestCycleWeight = (unsigned int)-1;
+			stableMigrationCount = 0;
+		}
+	}
+
 	template <typename Instance, typename gene = unsigned short>
 	int solveTSPFineGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, gene *globalBestCycle, int blockWarpCount, int seed, bool reportProgress = false) 
 	{
@@ -498,6 +522,7 @@ namespace tsp {
 		unsigned int* h_cycleWeight = new unsigned int[options.islandCount * options.islandPopulationSize];
 		unsigned int* h_islandBest = new unsigned int[options.islandCount];
 		unsigned int* h_islandWorst = new unsigned int[options.islandCount];
+		unsigned int stableMigrationCount = 0, stableBestCycleWeight = (unsigned int)-1;
 
 		if (cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int)) != cudaSuccess)
 			return -1;
@@ -526,15 +551,18 @@ namespace tsp {
 		if (cudaMemset(d_sourceInSecondBuffer, false, options.islandCount * sizeof(bool)) != cudaSuccess)
 			return -1;
 
+		if (cudaDeviceSynchronize() != cudaSuccess)
+			return -1;
+
+		if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
+			return -1;
+
+		if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
+			return -1;
+
+		updateStableMigrationCount(stableMigrationCount, stableBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
+
 		if (reportProgress) {
-			if (cudaDeviceSynchronize() != cudaSuccess)
-				return -1;
-
-			if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-				return -1;
-
-			if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-				return -1;
 
 			if (cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
 				return -1;
@@ -550,7 +578,7 @@ namespace tsp {
 				std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandWorst[i]];
 		}
 
-		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount; migrationNumber++) {
+		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stableMigrationCount < options.maxStableMigrationCount; migrationNumber++) {
 
 			migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 				d_population, options.islandPopulationSize, nWarpSizeAligned, 
@@ -563,15 +591,18 @@ namespace tsp {
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 			);
 
+			if (cudaDeviceSynchronize() != cudaSuccess)
+				return -1;
+
+			if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
+				return -1;
+
+			if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
+				return -1;
+
+			updateStableMigrationCount(stableMigrationCount, stableBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
+
 			if (reportProgress) {
-				if (cudaDeviceSynchronize() != cudaSuccess)
-					return -1;
-
-				if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-					return -1;
-
-				if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-					return -1;
 
 				if (cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
 					return -1;
@@ -585,15 +616,6 @@ namespace tsp {
 			}
 
 		}
-
-		if (cudaDeviceSynchronize() != cudaSuccess)
-			return -1;
-
-		if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
-
-		if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
 
 		unsigned int globalBestCycleWeight = (unsigned int)-1, globalBestIslandIndex = (unsigned int)-1;
 		bool globalBestIslandSourceInSecondBuffer = false;
@@ -630,4 +652,4 @@ namespace tsp {
 
 }
 
-#endif __ALGORITHM_FINE_GRAINED_H__
+#endif

@@ -63,7 +63,8 @@ int main(int argc, char *argv[])
         10,     // .migrationCount
         0.5f,    // .crossoverProbability
 		0.7f,    // .mutationProbability
-		true    // .elitism
+		true,    // .elitism
+        10,   // .stableMigrationCount
     };
     int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 32, 101, true);
 
@@ -76,7 +77,7 @@ int main(int argc, char *argv[])
         unsigned int verifiedCycleWeight = hostInstance->edgeWeight(optimalCycle[n - 1], optimalCycle[0]);
         visited[optimalCycle[n - 1]] = true;
 
-		for (int i = 0; i < n - 1; i++) {
+		for (unsigned int i = 0; i < n - 1; i++) {
             if (visited[optimalCycle[i]]) {
                 std::cout << "Vertex " << optimalCycle[i] << " repeated.\n";
             }

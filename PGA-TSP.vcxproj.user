@@ -4,11 +4,12 @@
     <ShowAllFiles>true</ShowAllFiles>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>pcb442.tsp</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>berlin52.tsp</LocalDebuggerCommandArguments>
     <RemoteDebuggerCommandArguments>pcb442.tsp</RemoteDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>berlin52.tsp</LocalDebuggerCommandArguments>
-    <RemoteDebuggerCommandArguments>berlin52.tsp</RemoteDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>berlin52.txt</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
