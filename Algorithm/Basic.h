@@ -1,17 +1,19 @@
 #ifndef __ALGORITHM_BASIC_H__
 #define __ALGORITHM_BASIC_H__
-#define MAX_ITER 50000
+#define MAX_ITER 2500
 #define SEED 100
-
+#define NUMBER_OF_ISLAND 10
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <thrust/extrema.h>
 #include <thrust/device_ptr.h>
+#include <thrust/fill.h>
 
 #include "Helper.h"
 #include "../Selections/Basic.h"
 #include "../Crossovers/Basic.h"
 #include "../Mutations/Basic.h"
+#include "BlockSwap.h"
 
 namespace tsp {
 	template <typename Instance>
@@ -195,10 +197,16 @@ namespace tsp {
 	template <typename Instance>
 	int solveTSP5(const Instance instance) {
 		const int blockSize = 256, gridSize = 4;
-		int* d_fitness, * d_population;
+		int* d_fitness, * d_population, * d_bestFitness;
 		curandState* d_globalState;
 
 		if (cudaMalloc(&d_fitness, blockSize * gridSize * sizeof(int)) != cudaSuccess)
+			return -1;
+
+		if (cudaMemset(d_fitness, -1, blockSize * gridSize * sizeof(int)) != cudaSuccess)
+			return -1;
+
+		if (cudaMalloc(&d_bestFitness, gridSize * sizeof(int)) != cudaSuccess)
 			return -1;
 
 		if (cudaMalloc(&d_population, blockSize * gridSize * size(instance) * sizeof(int)) != cudaSuccess)
@@ -207,15 +215,26 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
+		thrust::device_ptr<int> dev_fitness(d_fitness);
+		thrust::fill(dev_fitness, dev_fitness + blockSize * gridSize, -1);
+
 		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
+		for (int i = 0; i < NUMBER_OF_ISLAND; ++i)
+		{
+			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, MAX_ITER);
 
-		if (cudaDeviceSynchronize() != cudaSuccess)
-			return -1;
+			if (cudaDeviceSynchronize() != cudaSuccess)
+				return -1;
+
+			ChangeBestChromosomes << <gridSize, blockSize >> > (instance, d_population, d_bestFitness, d_globalState);
+
+			if (cudaDeviceSynchronize() != cudaSuccess)
+				return -1;
+		}
 
 		auto fitnessPtr = thrust::device_pointer_cast(d_fitness);
 		int opt = MAX_DISTANCE_CAN - *thrust::max_element(fitnessPtr, fitnessPtr + blockSize * gridSize);

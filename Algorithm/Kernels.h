@@ -212,13 +212,14 @@ namespace tsp {
 	}
 
 	template <typename Instance>
-	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
+	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, int maxIterations) {
 		__shared__ int totalFitness[128];
 		__shared__ int sharedFitness[128];
+		__shared__ int sharedFitnessIndex[128];
 		__shared__ int commonRandomStep;
 		__shared__ int counter;
 		int prevFitness = 0;
-		const int MAX_ITER_STOP = 100000;
+		const int MAX_ITER_STOP = 5000;
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
 		int k = 2;
@@ -234,15 +235,19 @@ namespace tsp {
 		result[0] = new int[instanceSize];
 		result[1] = new int[instanceSize];
 		bool flags[] = { false, false };
-		for (int i = 0; i < 2; ++i) {
-			initChromosome(chromosome[i], instanceSize, &localState);
-			fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+
+		if (fitness[tid] == -1) {
+			for (int i = 0; i < 2; ++i) {
+				initChromosome(chromosome[i], instanceSize, &localState);
+				fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+			}
 		}
+
 		__syncthreads();
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
-			SumVectorForChromosomes(totalFitness, fitness, sharedFitness);
+			SumVectorForChromosomes(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
 			if (counter == MAX_ITER_STOP)
 			{
 				break;
@@ -282,11 +287,11 @@ namespace tsp {
 			__syncthreads();
 			// Mutation
 			for (int i = 0; i < 2; ++i) {
-				if (curand_uniform(&localState) > 0.7) { 
+				if (curand_uniform(&localState) > 0.7) {
 					mutate(chromosome[i], instanceSize, &localState);
 				}
 			}
-			__syncthreads(); 
+			__syncthreads();
 			if ((iteration + 1) % k == 0)
 			{
 				if (bid == 0) {
@@ -309,11 +314,14 @@ namespace tsp {
 					chromosome[0] = population + tid * instanceSize;
 				}
 			}
-			
+
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
 			fitness[tid + 1] = hamiltonianCycleWeight(instance, chromosome[1]);
 			__syncthreads();
 		}
+
+		if (bid == 0)
+			bestFitness[blockIdx.x] = sharedFitnessIndex[0];
 
 		globalState[tid] = localState;
 		globalState[tid + 1] = localState;
