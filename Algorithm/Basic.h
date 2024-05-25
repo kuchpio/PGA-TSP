@@ -195,7 +195,7 @@ namespace tsp {
 	}
 
 	template <typename Instance>
-	int solveTSP5(const Instance instance) {
+	int solveTSP5(const Instance instance, int numerOfIslands, int maxIteration, int maxIterationStop) {
 		const int blockSize = 256, gridSize = 4;
 		int* d_fitness, * d_population, * d_bestFitness;
 		curandState* d_globalState;
@@ -223,9 +223,9 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		for (int i = 0; i < NUMBER_OF_ISLAND; ++i)
+		for (int i = 0; i < numerOfIslands; ++i)
 		{
-			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, MAX_ITER);
+			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, maxIteration, maxIterationStop);
 
 			if (cudaDeviceSynchronize() != cudaSuccess)
 				return -1;

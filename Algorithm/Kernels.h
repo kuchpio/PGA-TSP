@@ -212,17 +212,15 @@ namespace tsp {
 	}
 
 	template <typename Instance>
-	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, int maxIterations) {
+	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, int maxIterations, int maxIterationStop) {
 		__shared__ int totalFitness[128];
 		__shared__ int sharedFitness[128];
 		__shared__ int sharedFitnessIndex[128];
 		__shared__ int commonRandomStep;
 		__shared__ int counter;
 		int prevFitness = 0;
-		const int MAX_ITER_STOP = 5000;
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
-		int k = 2;
 		bool flag = false;
 		if (bid == 0)
 		{
@@ -248,7 +246,7 @@ namespace tsp {
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
 			SumVectorForChromosomes(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
-			if (counter == MAX_ITER_STOP)
+			if (counter == maxIterationStop)
 			{
 				break;
 			}
@@ -292,27 +290,22 @@ namespace tsp {
 				}
 			}
 			__syncthreads();
-			if ((iteration + 1) % k == 0)
+			if (bid == 0) {
+				commonRandomStep = curand(&localState) % 128;
+			}
+			__syncthreads();
+			int newIndx = blockDim.x * blockIdx.x * 2 + ((bid + commonRandomStep) * 2 + 1) % (blockDim.x * 2);
+			if (!flag)
 			{
-				if (bid == 0) {
-					commonRandomStep = curand(&localState) % 128;
-				}
-				__syncthreads();
-				int newIndx = blockDim.x * blockIdx.x * 2 + ((bid + commonRandomStep) * 2 + 1) % (blockDim.x * 2);
-
+				flag = !flag;
+				chromosome[0] = population + newIndx * instanceSize;
+				chromosome[1] = population + tid * instanceSize;
+			}
+			else
+			{
+				flag = !flag;
 				chromosome[1] = population + newIndx * instanceSize;
-				if (!flag)
-				{
-					flag = !flag;
-					chromosome[0] = population + newIndx * instanceSize;
-					chromosome[1] = population + tid * instanceSize;
-				}
-				else
-				{
-					flag = !flag;
-					chromosome[1] = population + newIndx * instanceSize;
-					chromosome[0] = population + tid * instanceSize;
-				}
+				chromosome[0] = population + tid * instanceSize;
 			}
 
 			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
