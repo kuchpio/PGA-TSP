@@ -215,9 +215,6 @@ namespace tsp {
 		if (cudaMalloc(&d_globalState, blockSize * gridSize * sizeof(curandState)) != cudaSuccess)
 			return -1;
 
-		thrust::device_ptr<int> dev_fitness(d_fitness);
-		thrust::fill(dev_fitness, dev_fitness + blockSize * gridSize, -1);
-
 		setupCurand << <gridSize, blockSize >> > (d_globalState, SEED);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
