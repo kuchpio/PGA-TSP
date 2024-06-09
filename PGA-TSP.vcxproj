@@ -89,6 +89,7 @@
     <ClInclude Include="Algorithm\Helper.h" />
     <ClInclude Include="Crossovers\Basic.h" />
     <ClInclude Include="Crossovers\Interval.h" />
+    <ClInclude Include="Crossovers\WarpPMX.h" />
     <ClInclude Include="Instance\GlobalMemoryInstance.h" />
     <ClInclude Include="Instance\HostInstance.h" />
     <ClInclude Include="Instance\InstanceReader.h" />

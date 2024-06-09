@@ -488,3 +488,4 @@ pga-tsp
 
 # tsp files
 *.tsp
+/PGA-TSP.vcxproj.user

@@ -57,14 +57,14 @@ int main(int argc, char *argv[])
 
     unsigned short *optimalCycle = new unsigned short[globalMemoryInstance->size()];
     tsp::IslandGeneticAlgorithmOptions options = {
-        8,      // .islandCount
-        100,     // .islandPopulationSize
-        100,     // .isolatedIterationCount
-        10,     // .migrationCount
-        0.5f,    // .crossoverProbability
-		0.7f,    // .mutationProbability
-		true,    // .elitism
-        10,   // .stableMigrationCount
+    /* .islandCount: */             8,
+    /* .islandPopulationSize: */    100,
+    /* .isolatedIterationCount: */  50,
+    /* .migrationCount: */          20,
+    /* .crossoverProbability: */    0.5f,
+    /* .mutationProbability: */     0.7f,
+    /* .elitism: */                 true,
+    /* .stalledMigrationsLimit: */  50
     };
     int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 32, 101, true);
 
