@@ -15,7 +15,7 @@ namespace tsp{
 	__device__ __forceinline__ 
 	void mutate(gene* chromosome, unsigned int size, curandState* state)
 	{
-		unsigned int lid = (blockDim.x * blockIdx.x + threadIdx.x) & (WARP_SIZE - 1);
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end, geneIndex;
 		gene curr;
 		bool readNext = true;

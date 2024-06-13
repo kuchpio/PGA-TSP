@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     /* .elitism: */                 true,
     /* .stalledMigrationsLimit: */  50
     };
-    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 32, 101, true);
+    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 20, 101, true);
 
     std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
 

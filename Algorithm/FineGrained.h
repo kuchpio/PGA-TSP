@@ -49,7 +49,7 @@ namespace tsp {
 	template <typename Instance, typename vertex>
 	__device__ __forceinline__ unsigned int calculateCycleWeight(const vertex* cycle, const Instance instance) 
 	{
-		unsigned int lid = (blockDim.x * blockIdx.x + threadIdx.x) & (WARP_SIZE - 1);
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int lidShfl = (lid + 1) & (WARP_SIZE - 1);
 		unsigned int n = size(instance);
 		unsigned int nWarpSizeAligned = (n & ~(WARP_SIZE - 1)) + WARP_SIZE;
@@ -99,10 +99,10 @@ namespace tsp {
 	}
 
 	template <bool reduceMin = true, bool reduceMax = true>
-	__device__ __forceinline__ void findMinMax(unsigned int* array, unsigned int arraySize, unsigned int* reductionBuffer, 
+	__device__ __forceinline__ void findMinMax(const unsigned int* array, unsigned int arraySize, unsigned int* reductionBuffer, 
 		unsigned int minIndex, unsigned int maxIndex, unsigned int *minIndexOutput, unsigned int *maxIndexOutput) 
 	{
-		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
+		unsigned int blockWid = threadIdx.x / WARP_SIZE;			// Block warp id
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 
 		unsigned int* reducedMin, * reducedMinIndex, * reducedMax, * reducedMaxIndex;
@@ -116,12 +116,12 @@ namespace tsp {
 		}
 		if (reduceMax) {
 			reducedMax = reductionBuffer + (reduceMin ? 2 * WARP_SIZE : 0);
-			reducedMaxIndex = reducedMax +  WARP_SIZE;
+			reducedMaxIndex = reducedMax + WARP_SIZE;
 			max = 0;
 			maxIndex = threadIdx.x;
 		}
 
-		// 1. Block stride loop thread reduction and output writing
+		// 1. Block stride loop thread reduction
 		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < arraySize; chromosomeIndex += blockDim.x) {
 			unsigned int value = array[chromosomeIndex];
 			if (reduceMin && min > value) {
@@ -177,10 +177,12 @@ namespace tsp {
 			if (reduceMin) {
 				min = reducedMin[lid];
 				minIndex = reducedMinIndex[lid];
+				if (lid >= blockDim.x / WARP_SIZE) min = 0xffffffff;
 			}
 			if (reduceMax) {
 				max = reducedMax[lid];
 				maxIndex = reducedMaxIndex[lid];
+				if (lid >= blockDim.x / WARP_SIZE) max = 0;
 			}
 
 			for (int i = 1; i < WARP_SIZE; i *= 2) {
@@ -226,12 +228,11 @@ namespace tsp {
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
 
 		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
-		unsigned int blockWid = (tid >> 5) & (WARP_SIZE - 1);		// Block warp id
-		unsigned int lid = tid & (WARP_SIZE - 1);					// Warp thread id
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 		unsigned int n = size(instance);
 		unsigned int nWarpSizeAligned = (n & ~(WARP_SIZE - 1)) + WARP_SIZE;
 
-		for (unsigned int chromosomeIndex = blockWid; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x >> 5)) {
+		for (unsigned int chromosomeIndex = threadIdx.x / WARP_SIZE; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x / WARP_SIZE)) {
 			gene* chromosome = population + (blockIdx.x * 2 * islandPopulationSize + chromosomeIndex) * nWarpSizeAligned;
 
 			initializeCycle(chromosome, n, globalState + tid);
@@ -253,37 +254,27 @@ namespace tsp {
 		unsigned int *cycleWeight, unsigned int* islandBest, unsigned int* islandWorst, bool *sourceInSecondBuffer) 
 	{
 		__shared__ gene *s_srcDst[2];
-		__shared__ unsigned int s_reductionBuffer[2 * WARP_SIZE];
 
 		unsigned int thisIsland = blockIdx.x;
 		unsigned int nextIsland = (blockIdx.x + 1) % gridDim.x;
 
-		int minIndex; // Only set when threadIdx.x == 0
 		if (threadIdx.x == 0) {
-			unsigned int nextIslandBestWid = islandBest[nextIsland];
-			unsigned int thisIslandBestWid = islandBest[thisIsland];
-			unsigned int thisIslandWorstWid = islandWorst[thisIsland];
+			unsigned int nextIslandBestIndex = islandBest[nextIsland];
+			unsigned int thisIslandWorstIndex = islandWorst[thisIsland];
 
-			unsigned int nextIslandBestWidGlobal = nextIsland * islandPopulationSize + nextIslandBestWid;
-			unsigned int thisIslandBestWidGlobal = thisIsland * islandPopulationSize + thisIslandBestWid;
-			unsigned int thisIslandWorstWidGlobal = thisIsland * islandPopulationSize + thisIslandWorstWid;
+			unsigned int nextIslandBestIndexGlobal = nextIsland * islandPopulationSize + nextIslandBestIndex;
+			unsigned int thisIslandWorstIndexGlobal = thisIsland * islandPopulationSize + thisIslandWorstIndex;
 
-			unsigned int nextIslandBestCycleWeight = cycleWeight[nextIslandBestWidGlobal];
-			unsigned int thisIslandBestCycleWeight = cycleWeight[thisIslandBestWidGlobal];
-
-			cycleWeight[thisIslandWorstWidGlobal] = nextIslandBestCycleWeight;
-			minIndex = thisIslandBestCycleWeight > nextIslandBestCycleWeight ? thisIslandWorstWid : thisIslandBestWid;
+			cycleWeight[thisIslandWorstIndexGlobal] = cycleWeight[nextIslandBestIndexGlobal];
 
 			bool nextSourceInSecondBuffer = sourceInSecondBuffer[nextIsland];
 			bool thisSourceInSecondBuffer = sourceInSecondBuffer[thisIsland];
 
-			s_srcDst[0] = population + (2 * nextIsland * islandPopulationSize + (nextSourceInSecondBuffer ? islandPopulationSize : 0) + nextIslandBestWid) * nWarpSizeAligned;
-			s_srcDst[1] = population + (2 * thisIsland * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + thisIslandWorstWid) * nWarpSizeAligned;
+			s_srcDst[0] = population + nWarpSizeAligned * 
+				(2 * nextIsland * islandPopulationSize + (nextSourceInSecondBuffer ? islandPopulationSize : 0) + nextIslandBestIndex);
+			s_srcDst[1] = population + nWarpSizeAligned * 
+				(2 * thisIsland * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + thisIslandWorstIndex);
 		}
-
-		__syncthreads();
-
-		findMinMax<false, true>(cycleWeight, islandPopulationSize, s_reductionBuffer, minIndex, threadIdx.x, islandBest + thisIsland, islandWorst + thisIsland);
 
 		__syncthreads();
 
@@ -295,12 +286,18 @@ namespace tsp {
 			dstChromosome[i] = srcChromosome[i];
 	}
 
+	__global__ void postMigrationKernel(unsigned int islandPopulationSize, const unsigned int* cycleWeight, unsigned int* islandBest, unsigned int* islandWorst)
+	{
+		__shared__ unsigned int s_reductionBuffer[2 * WARP_SIZE];
+		findMinMax(cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, islandBest + blockIdx.x, islandWorst + blockIdx.x);
+	}
+
 	__device__ __forceinline__ float createRoulletteWheel(unsigned int islandBestIndex, unsigned int islandWorstIndex, 
 		unsigned int islandPopulationSize, unsigned int *cycleWeight, float *roulletteWheelThreshold) 
 	{
 		float *reducedRoulletteWheelThresholdSum = roulletteWheelThreshold + islandPopulationSize;
 
-		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
+		unsigned int blockWid = threadIdx.x / WARP_SIZE;			// Block warp id
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 
 		unsigned int min = cycleWeight[islandBestIndex];
@@ -333,6 +330,7 @@ namespace tsp {
 
 		if (blockWid == 0) {
 			intervalWidthSum = reducedRoulletteWheelThresholdSum[lid];
+			if (lid >= blockDim.x / WARP_SIZE) intervalWidthSum = 0.0f;
 			for (unsigned int i = 1; i < WARP_SIZE; i *= 2) 
 				intervalWidthSum += __shfl_xor_sync(FULL_MASK, intervalWidthSum, i);
 			reducedRoulletteWheelThresholdSum[lid] = intervalWidthSum;
@@ -373,11 +371,12 @@ namespace tsp {
 		extern __shared__ unsigned int s_buffer[];
 		unsigned int* s_reductionBuffer = s_buffer;
 		unsigned int *s_cycleWeight = s_buffer + 4 * WARP_SIZE;
-		unsigned int* s_islandBestWorstIndex = s_cycleWeight + islandPopulationSize;
-		float *s_roulletteWheelThreshold = (float*)(s_islandBestWorstIndex + 2);
+		unsigned int* s_islandBestIndex = s_cycleWeight + islandPopulationSize;
+		unsigned int* s_islandWorstIndex = s_cycleWeight + islandPopulationSize + 1;
+		float *s_roulletteWheelThreshold = (float*)(s_cycleWeight + islandPopulationSize + 2);
 
 		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
-		unsigned int blockWid = threadIdx.x >> 5;					// Block warp id
+		unsigned int blockWarpCount = blockDim.x / WARP_SIZE;		// Block warp count
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
 		bool thisSourceInSecondBuffer = sourceInSecondBuffer[blockIdx.x];
@@ -386,22 +385,22 @@ namespace tsp {
 			s_cycleWeight[chromosomeIndex] = cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex];
 
 		if (threadIdx.x == 0) {
-			s_islandBestWorstIndex[0] = islandBest[blockIdx.x];
-			s_islandBestWorstIndex[1] = islandWorst[blockIdx.x];
+			*s_islandBestIndex = islandBest[blockIdx.x];
+			*s_islandWorstIndex = islandWorst[blockIdx.x];
 		}
 
 		__syncthreads();
 
 		while (iterationCount-- > 0) {
 
-			unsigned int islandBestIndex = s_islandBestWorstIndex[0];
-			unsigned int islandWorstIndex = s_islandBestWorstIndex[1];
+			unsigned int islandBestIndex = *s_islandBestIndex;
+			unsigned int islandWorstIndex = *s_islandWorstIndex;
 
 			// Selection
 			{
 				float maxThreshold = createRoulletteWheel(islandBestIndex, islandWorstIndex, islandPopulationSize, s_cycleWeight, s_roulletteWheelThreshold);
 
-				for (unsigned int chromosomeIndex = blockWid; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x >> 5)) {
+				for (unsigned int chromosomeIndex = threadIdx.x / WARP_SIZE; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockWarpCount) {
 
 					// Select lane id based on roullette wheel selection
 					unsigned int selectedIndex = elitism && chromosomeIndex == islandBestIndex ? chromosomeIndex : 
@@ -422,7 +421,7 @@ namespace tsp {
 
 			__syncthreads();
 
-			for (unsigned int chromosomeIndex = 2 * blockWid; chromosomeIndex < islandPopulationSize; chromosomeIndex += 2 * (blockDim.x >> 5)) {
+			for (unsigned int chromosomeIndex = 2 * (threadIdx.x / WARP_SIZE); chromosomeIndex < islandPopulationSize; chromosomeIndex += 2 * blockWarpCount) {
 				gene* chromosomeA = population + nWarpSizeAligned * 
 					(blockIdx.x * 2 * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + chromosomeIndex);
 				gene* chromosomeB = population + nWarpSizeAligned * 
@@ -435,7 +434,7 @@ namespace tsp {
 					(!elitism || (chromosomeIndex != islandBestIndex && chromosomeIndex + 1 != islandBestIndex)) && 
 					crossoverProbability > curand_uniform(globalState + tid);
 				if (__shfl_sync(FULL_MASK, performCrossover, 0)) {
-					crossover(chromosomeA, chromosomeB, size(instance), globalState + tid);
+					// crossover(chromosomeA, chromosomeB, size(instance), globalState + tid);
 				}
 
 				// Mutation : chromosomeA
@@ -466,23 +465,21 @@ namespace tsp {
 			__syncthreads();
 
 			// Best and Worst
-			findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, s_islandBestWorstIndex, s_islandBestWorstIndex + 1);
+			findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, s_islandBestIndex, s_islandWorstIndex);
 
 			__syncthreads();
-
-			// If population is stable break : TODO
 		}
 
 		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x)
 			cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex] = s_cycleWeight[chromosomeIndex];
 
 		if (threadIdx.x == 0) {
-			if (s_islandBestWorstIndex[0] == s_islandBestWorstIndex[1]) {
+			if (*s_islandBestIndex == *s_islandWorstIndex) {
 				islandBest[blockIdx.x] = 0;
 				islandWorst[blockIdx.x] = islandPopulationSize - 1;
 			} else {
-				islandBest[blockIdx.x] = s_islandBestWorstIndex[0];
-				islandWorst[blockIdx.x] = s_islandBestWorstIndex[1];
+				islandBest[blockIdx.x] = *s_islandBestIndex;
+				islandWorst[blockIdx.x] = *s_islandWorstIndex;
 			}
 			sourceInSecondBuffer[blockIdx.x] = thisSourceInSecondBuffer;
 		}
@@ -583,6 +580,10 @@ namespace tsp {
 			migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 				d_population, options.islandPopulationSize, nWarpSizeAligned, 
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
+			);
+
+			postMigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
+				options.islandPopulationSize, d_cycleWeight, d_islandBest, d_islandWorst
 			);
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
