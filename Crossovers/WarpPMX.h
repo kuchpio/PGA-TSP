@@ -9,9 +9,125 @@
 
 namespace tsp {
 
+	// Interval swapped using warp reads and writes
+	// Fixes are done using only warp leader
 	template<typename gene>
 	__device__ __forceinline__
-	void crossover(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	void crossover1(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	{
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
+		unsigned int start, end;
+
+		if (lid == 0) {
+			start = curand(state) % size;
+			end = curand(state) % size;
+			if (start > end)
+			{
+				unsigned int temp = start;
+				start = end;
+				end = temp;
+			}
+		}
+		start = __shfl_sync(FULL_MASK, start, 0);
+		end = __shfl_sync(FULL_MASK, end, 0) + 1;
+
+		// Swap interval <start; end)
+		{
+			unsigned int indexOffset = start & ~(WARP_SIZE - 1);
+			gene temp;
+
+			gene a = chromosomeA[indexOffset + lid];
+			gene b = chromosomeB[indexOffset + lid];
+			if (start <= indexOffset + lid && indexOffset + lid < end) {
+				temp = a;
+				a = b;
+				b = temp;
+			}
+			chromosomeA[indexOffset + lid] = a;
+			chromosomeB[indexOffset + lid] = b;
+			indexOffset += WARP_SIZE;
+
+			while (indexOffset + WARP_SIZE < end) {
+				temp = chromosomeA[indexOffset + lid];
+				chromosomeA[indexOffset + lid] = chromosomeB[indexOffset + lid];
+				chromosomeB[indexOffset + lid] = temp;
+				indexOffset += WARP_SIZE;
+			}
+
+			if (indexOffset < end) {
+				a = chromosomeA[indexOffset + lid];
+				b = chromosomeB[indexOffset + lid];
+				if (start <= indexOffset + lid && indexOffset + lid < end) {
+					temp = a;
+					a = b;
+					b = temp;
+				}
+				chromosomeA[indexOffset + lid] = a;
+				chromosomeB[indexOffset + lid] = b;
+			}
+		}
+
+		if (lid == 0) {
+			for (unsigned int indexOffset = 0; indexOffset < start; indexOffset++) {
+				gene a = chromosomeA[indexOffset];
+				gene b = chromosomeB[indexOffset];
+				bool aUnique = false, bUnique = false;
+
+				while (!(aUnique && bUnique)) {
+					aUnique = bUnique = true;
+
+					for (unsigned int i = start; i < end; i++) {
+						gene aInterval = chromosomeA[i];
+						gene bInterval = chromosomeB[i];
+
+						if (a == aInterval) {
+							aUnique = false;
+							a = bInterval;
+						}
+						if (b == bInterval) {
+							bUnique = false;
+							b = aInterval;
+						}
+					}
+				}
+				chromosomeA[indexOffset] = a;
+				chromosomeB[indexOffset] = b;
+			}
+
+			for (unsigned int indexOffset = end; indexOffset < size; indexOffset++) {
+				gene a = chromosomeA[indexOffset];
+				gene b = chromosomeB[indexOffset];
+				bool aUnique = false, bUnique = false;
+
+				while (!(aUnique && bUnique)) {
+					aUnique = bUnique = true;
+
+					for (unsigned int i = start; i < end; i++) {
+						gene aInterval = chromosomeA[i];
+						gene bInterval = chromosomeB[i];
+
+						if (a == aInterval) {
+							aUnique = false;
+							a = bInterval;
+						}
+						if (b == bInterval) {
+							bUnique = false;
+							b = aInterval;
+						}
+					}
+				}
+				chromosomeA[indexOffset] = a;
+				chromosomeB[indexOffset] = b;
+			}
+		}
+	}
+
+	// Interval swapped using warp reads and writes
+	// Outside of interval is read and written unsing warp
+	// Uniqeness is checked using warp broadcast sequential reads of swapped interval
+	template<typename gene>
+	__device__ __forceinline__
+	void crossover2(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end;
@@ -45,7 +161,7 @@ namespace tsp {
 			chromosomeB[indexOffset + lid] = b;
 			indexOffset += WARP_SIZE;
 
-			while (indexOffset < end - WARP_SIZE) {
+			while (indexOffset + WARP_SIZE < end) {
 				temp = chromosomeA[indexOffset + lid];
 				chromosomeA[indexOffset + lid] = chromosomeB[indexOffset + lid];
 				chromosomeB[indexOffset + lid] = temp;
@@ -71,57 +187,143 @@ namespace tsp {
 			gene b = chromosomeB[indexOffset + lid];
 			bool aUnique = false, bUnique = false;
 
-			while (__any_sync(FULL_MASK, !aUnique || !bUnique)) {
+			while (__any_sync(FULL_MASK, !(aUnique && bUnique))) {
 				aUnique = bUnique = true;
-				unsigned int intervalIndexOffset = start & ~(WARP_SIZE - 1);
-				gene aInterval = chromosomeA[intervalIndexOffset + lid];
-				gene bInterval = chromosomeB[intervalIndexOffset + lid];
-				unsigned int broadcastLidEnd = intervalIndexOffset + WARP_SIZE < end ? WARP_SIZE : end & (WARP_SIZE - 1);
-				for (unsigned int broadcastLid = start & (WARP_SIZE - 1); broadcastLid < broadcastLidEnd; broadcastLid++) {
-					gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-					gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-					if (a == aIntervalShuf && indexOffset + lid < start) {
+
+				for (unsigned int i = start; i < end; i++) {
+					gene aInterval = chromosomeA[i];
+					gene bInterval = chromosomeB[i];
+
+					if (a == aInterval && indexOffset + lid < start) {
 						aUnique = false;
-						a = bIntervalShuf;
+						a = bInterval;
 					}
-					if (b == bIntervalShuf && indexOffset + lid < start) {
+					if (b == bInterval && indexOffset + lid < start) {
 						bUnique = false;
-						b = aIntervalShuf;
+						b = aInterval;
 					}
 				}
-				intervalIndexOffset += WARP_SIZE;
+			}
 
-				while (intervalIndexOffset < end - WARP_SIZE) {
-					aInterval = chromosomeA[intervalIndexOffset + lid];
-					bInterval = chromosomeB[intervalIndexOffset + lid];
-					for (unsigned int broadcastLid = 0; broadcastLid < WARP_SIZE; broadcastLid++) {
-						gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-						gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-						if (a == aIntervalShuf && indexOffset + lid < start) {
-							aUnique = false;
-							a = bIntervalShuf;
-						}
-						if (b == bIntervalShuf && indexOffset + lid < start) {
-							bUnique = false;
-							b = aIntervalShuf;
-						}
+			chromosomeA[indexOffset + lid] = a;
+			chromosomeB[indexOffset + lid] = b;
+		}
+
+		// Fix interval <end; size)
+		for (unsigned int indexOffset = end & ~(WARP_SIZE - 1); indexOffset < size; indexOffset += WARP_SIZE) {
+			gene a = chromosomeA[indexOffset + lid];
+			gene b = chromosomeB[indexOffset + lid];
+			bool aUnique = false, bUnique = false;
+
+			while (__any_sync(FULL_MASK, !(aUnique && bUnique))) {
+				aUnique = bUnique = true;
+
+				for (unsigned int i = start; i < end; i++) {
+					gene aInterval = chromosomeA[i];
+					gene bInterval = chromosomeB[i];
+
+					if (a == aInterval && end <= indexOffset + lid && indexOffset + lid < size) {
+						aUnique = false;
+						a = bInterval;
 					}
-					intervalIndexOffset += WARP_SIZE;
+					if (b == bInterval && end <= indexOffset + lid && indexOffset + lid < size) {
+						bUnique = false;
+						b = aInterval;
+					}
 				}
+			}
 
-				if (intervalIndexOffset < end) {
-					aInterval = chromosomeA[intervalIndexOffset + lid];
-					bInterval = chromosomeB[intervalIndexOffset + lid];
-					for (unsigned int broadcastLid = 0; broadcastLid < (end & (WARP_SIZE - 1)); broadcastLid++) {
-						gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-						gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-						if (a == aIntervalShuf && indexOffset + lid < start) {
+			chromosomeA[indexOffset + lid] = a;
+			chromosomeB[indexOffset + lid] = b;
+		}
+
+	}
+
+	// Interval swapped using warp reads and writes
+	// Outside of interval is read and written unsing warp
+	// Uniqeness is checked using sequential __shfl_sync's of coalesced reads of swapped interval
+	template<typename gene>
+	__device__ __forceinline__
+	void crossover3(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	{
+		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
+		unsigned int start, end;
+
+		if (lid == 0) {
+			start = curand(state) % size;
+			end = curand(state) % size;
+			if (start > end) 
+			{
+				unsigned int temp = start;
+				start = end;
+				end = temp;
+			}
+		}
+		start = __shfl_sync(FULL_MASK, start, 0);
+		end = __shfl_sync(FULL_MASK, end, 0) + 1;
+
+		// Swap interval <start; end)
+		{
+			unsigned int indexOffset = start & ~(WARP_SIZE - 1);
+			gene temp;
+
+			gene a = chromosomeA[indexOffset + lid];
+			gene b = chromosomeB[indexOffset + lid];
+			if (start <= indexOffset + lid && indexOffset + lid < end) {
+				temp = a;
+				a = b;
+				b = temp;
+			}
+			chromosomeA[indexOffset + lid] = a;
+			chromosomeB[indexOffset + lid] = b;
+			indexOffset += WARP_SIZE;
+
+			while (indexOffset + WARP_SIZE < end) {
+				temp = chromosomeA[indexOffset + lid];
+				chromosomeA[indexOffset + lid] = chromosomeB[indexOffset + lid];
+				chromosomeB[indexOffset + lid] = temp;
+				indexOffset += WARP_SIZE;
+			}
+
+			if (indexOffset < end) {
+				a = chromosomeA[indexOffset + lid];
+				b = chromosomeB[indexOffset + lid];
+				if (start <= indexOffset + lid && indexOffset + lid < end) {
+					temp = a;
+					a = b;
+					b = temp;
+				}
+				chromosomeA[indexOffset + lid] = a;
+				chromosomeB[indexOffset + lid] = b;
+			}
+		}
+
+		// Fix interval <0; start)
+		for (unsigned int indexOffset = 0; indexOffset < start; indexOffset += WARP_SIZE) {
+			gene a = chromosomeA[indexOffset + lid];
+			gene b = chromosomeB[indexOffset + lid];
+			bool aUnique = false, bUnique = false;
+
+			while (__any_sync(FULL_MASK, !(aUnique && bUnique))) {
+				aUnique = bUnique = true;
+
+				for (unsigned int intervalIndexOffset = start & ~(WARP_SIZE - 1); intervalIndexOffset < end; intervalIndexOffset += WARP_SIZE) {
+					gene aInterval = chromosomeA[intervalIndexOffset + lid];
+					gene bInterval = chromosomeB[intervalIndexOffset + lid];
+
+					unsigned int broadcastStartLid = (intervalIndexOffset > start ? intervalIndexOffset : start) & (WARP_SIZE - 1);
+					unsigned int broadcastEndLid = ((intervalIndexOffset + WARP_SIZE < end ? intervalIndexOffset + WARP_SIZE : end) - 1) & (WARP_SIZE - 1);
+					for (unsigned int broadcastLid = broadcastStartLid; broadcastLid <= broadcastEndLid; broadcastLid++) {
+						gene aIntervalShfl = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
+						gene bIntervalShfl = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
+
+						if (a == aIntervalShfl && indexOffset + lid < start) {
 							aUnique = false;
-							a = bIntervalShuf;
+							a = bIntervalShfl;
 						}
-						if (b == bIntervalShuf && indexOffset + lid < start) {
+						if (b == bIntervalShfl && indexOffset + lid < start) {
 							bUnique = false;
-							b = aIntervalShuf;
+							b = aIntervalShfl;
 						}
 					}
 				}
@@ -137,57 +339,26 @@ namespace tsp {
 			gene b = chromosomeB[indexOffset + lid];
 			bool aUnique = false, bUnique = false;
 
-			while (__any_sync(FULL_MASK, !aUnique || !bUnique)) {
+			while (__any_sync(FULL_MASK, !(aUnique && bUnique))) {
 				aUnique = bUnique = true;
-				unsigned int intervalIndexOffset = start & ~(WARP_SIZE - 1);
-				gene aInterval = chromosomeA[intervalIndexOffset + lid];
-				gene bInterval = chromosomeB[intervalIndexOffset + lid];
-				unsigned int broadcastLidEnd = intervalIndexOffset + WARP_SIZE < end ? WARP_SIZE : end & (WARP_SIZE - 1);
-				for (unsigned int broadcastLid = start & (WARP_SIZE - 1); broadcastLid < broadcastLidEnd; broadcastLid++) {
-					gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-					gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-					if (a == aIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
-						aUnique = false;
-						a = bIntervalShuf;
-					}
-					if (b == bIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
-						bUnique = false;
-						b = aIntervalShuf;
-					}
-				}
-				intervalIndexOffset += WARP_SIZE;
 
-				while (intervalIndexOffset < end - WARP_SIZE) {
-					aInterval = chromosomeA[intervalIndexOffset + lid];
-					bInterval = chromosomeB[intervalIndexOffset + lid];
-					for (unsigned int broadcastLid = 0; broadcastLid < WARP_SIZE; broadcastLid++) {
-						gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-						gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-						if (a == aIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
-							aUnique = false;
-							a = bIntervalShuf;
-						}
-						if (b == bIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
-							bUnique = false;
-							b = aIntervalShuf;
-						}
-					}
-					intervalIndexOffset += WARP_SIZE;
-				}
+				for (unsigned int intervalIndexOffset = start & ~(WARP_SIZE - 1); intervalIndexOffset < end; intervalIndexOffset += WARP_SIZE) {
+					gene aInterval = chromosomeA[intervalIndexOffset + lid];
+					gene bInterval = chromosomeB[intervalIndexOffset + lid];
 
-				if (intervalIndexOffset < end) {
-					aInterval = chromosomeA[intervalIndexOffset + lid];
-					bInterval = chromosomeB[intervalIndexOffset + lid];
-					for (unsigned int broadcastLid = 0; broadcastLid < (end & (WARP_SIZE - 1)); broadcastLid++) {
-						gene aIntervalShuf = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
-						gene bIntervalShuf = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
-						if (a == aIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
+					unsigned int broadcastStartLid = (intervalIndexOffset > start ? intervalIndexOffset : start) & (WARP_SIZE - 1);
+					unsigned int broadcastEndLid = ((intervalIndexOffset + WARP_SIZE < end ? intervalIndexOffset + WARP_SIZE : end) - 1) & (WARP_SIZE - 1);
+					for (unsigned int broadcastLid = broadcastStartLid; broadcastLid <= broadcastEndLid; broadcastLid++) {
+						gene aIntervalShfl = __shfl_sync(FULL_MASK, aInterval, broadcastLid);
+						gene bIntervalShfl = __shfl_sync(FULL_MASK, bInterval, broadcastLid);
+
+						if (a == aIntervalShfl && end <= indexOffset + lid && indexOffset + lid < size) {
 							aUnique = false;
-							a = bIntervalShuf;
+							a = bIntervalShfl;
 						}
-						if (b == bIntervalShuf && end <= indexOffset + lid && indexOffset + lid < size) {
+						if (b == bIntervalShfl && end <= indexOffset + lid && indexOffset + lid < size) {
 							bUnique = false;
-							b = aIntervalShuf;
+							b = aIntervalShfl;
 						}
 					}
 				}

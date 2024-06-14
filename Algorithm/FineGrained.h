@@ -33,7 +33,6 @@ namespace tsp {
 		for (vertex i = lid; i < n; i += WARP_SIZE) 
 			cycle[i] = i;
 
-		// TODO: Parallelize shuffle
 		if (lid == 0) {
 			for (unsigned int i = n - 1; i > 0; i--) {
 				unsigned int j = curand(state) % (i + 1);
@@ -286,12 +285,6 @@ namespace tsp {
 			dstChromosome[i] = srcChromosome[i];
 	}
 
-	__global__ void postMigrationKernel(unsigned int islandPopulationSize, const unsigned int* cycleWeight, unsigned int* islandBest, unsigned int* islandWorst)
-	{
-		__shared__ unsigned int s_reductionBuffer[2 * WARP_SIZE];
-		findMinMax(cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, islandBest + blockIdx.x, islandWorst + blockIdx.x);
-	}
-
 	__device__ __forceinline__ float createRoulletteWheel(unsigned int islandBestIndex, unsigned int islandWorstIndex, 
 		unsigned int islandPopulationSize, unsigned int *cycleWeight, float *roulletteWheelThreshold) 
 	{
@@ -384,10 +377,7 @@ namespace tsp {
 		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x)
 			s_cycleWeight[chromosomeIndex] = cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex];
 
-		if (threadIdx.x == 0) {
-			*s_islandBestIndex = islandBest[blockIdx.x];
-			*s_islandWorstIndex = islandWorst[blockIdx.x];
-		}
+		findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, s_islandBestIndex, s_islandWorstIndex);
 
 		__syncthreads();
 
@@ -434,7 +424,7 @@ namespace tsp {
 					(!elitism || (chromosomeIndex != islandBestIndex && chromosomeIndex + 1 != islandBestIndex)) && 
 					crossoverProbability > curand_uniform(globalState + tid);
 				if (__shfl_sync(FULL_MASK, performCrossover, 0)) {
-					// crossover(chromosomeA, chromosomeB, size(instance), globalState + tid);
+					crossover3(chromosomeA, chromosomeB, size(instance), globalState + tid);
 				}
 
 				// Mutation : chromosomeA
@@ -580,10 +570,6 @@ namespace tsp {
 			migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 				d_population, options.islandPopulationSize, nWarpSizeAligned, 
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
-			);
-
-			postMigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
-				options.islandPopulationSize, d_cycleWeight, d_islandBest, d_islandWorst
 			);
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
