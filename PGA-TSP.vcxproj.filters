@@ -54,9 +54,13 @@
     <ClInclude Include="Crossovers\WarpPMX.h" />
     <ClInclude Include="Selections\WarpRouletteWheel.h" />
     <ClInclude Include="Algorithm\WarpCycleHelper.h" />
+    <ClInclude Include="Crossovers\PMX.h" />
+    <ClInclude Include="Algorithm\VectorReduction.h" />
+    <ClInclude Include="Algorithm\BlockSwap.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
+    <Text Include="berlin52.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />

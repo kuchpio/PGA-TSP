@@ -5,16 +5,15 @@
 #include <device_launch_parameters.h>
 
 #include "Helper.h"
-
+#define MAX_DISTANCE_CAN 1000000
 namespace tsp {
-
 	typedef struct GlobalMemoryInstance {
 		int* d_adjecencyMatrix = NULL;
 		int size = 0;
 	} GlobalMemoryInstance;
 
 	template <typename Metric>
-	bool initInstance(GlobalMemoryInstance *instance, const float* x, const float* y, const int size, Metric metric) {
+	bool initInstance(GlobalMemoryInstance* instance, const float* x, const float* y, const int size, Metric metric) {
 		float* d_x, * d_y;
 		int* d_adjecencyMatrix;
 
@@ -48,26 +47,25 @@ namespace tsp {
 	}
 
 	__device__ __host__
-	int size(const GlobalMemoryInstance instance) {
+		int size(const GlobalMemoryInstance instance) {
 		return instance.size;
 	}
 
 	__device__
-	int edgeWeight(const GlobalMemoryInstance instance, const int from, const int to) {
+		int edgeWeight(const GlobalMemoryInstance instance, const int from, const int to) {
 		return instance.d_adjecencyMatrix[from * size(instance) + to];
 	}
 
 	__device__
-	int hamiltonianCycleWeight(const GlobalMemoryInstance instance, const int* cycle) {
+		int hamiltonianCycleWeight(const GlobalMemoryInstance instance, const int* cycle) {
 		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
 
 		for (int i = 0; i < size(instance) - 1; i++) {
 			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
 		}
 
-		return sum;
+		return MAX_DISTANCE_CAN - sum;
 	}
-
 }
 
 #endif

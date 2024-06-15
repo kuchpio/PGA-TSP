@@ -4,21 +4,20 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
-namespace tsp{
-    
-	__device__ 
-	void mutate(int* chromosome, int size, curandState* state)
+namespace tsp {
+	__device__
+		void intervalMutate(int* chromosome, int size, curandState* state)
 	{
 		int start = curand(state) % size;
 		int end = curand(state) % size;
-		if (start > end) 
+		if (start > end)
 		{
 			int temp = start;
 			start = end;
 			end = temp;
 		}
 
-		while (start < end) 
+		while (start < end)
 		{
 			int temp = chromosome[start];
 			chromosome[start] = chromosome[end];
@@ -27,7 +26,6 @@ namespace tsp{
 			end--;
 		}
 	}
-
 }
 
 #endif
