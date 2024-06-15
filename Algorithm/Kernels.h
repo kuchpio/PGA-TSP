@@ -8,6 +8,7 @@
 #include "Helper.h"
 #include "CycleHelper.h"
 #include "../Selections/Basic.h"
+#include "../Crossovers/Basic.h"
 #include "../Crossovers/Interval.h"
 #include "../Crossovers/PMX.h"
 #include "../Selections/RouleteWheel.h"
@@ -213,7 +214,9 @@ namespace tsp {
 	}
 
 	template <typename Instance>
-	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, int maxIterations, int maxIterationStop) {
+	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, 
+		int maxIterations, int maxIterationStop, float crossoverProbability, float mutationProbability, bool elitism) 
+	{
 		__shared__ int totalFitness[128];
 		__shared__ int sharedFitness[128];
 		__shared__ int sharedFitnessIndex[128];
@@ -264,7 +267,7 @@ namespace tsp {
 			for (int i = 0; i < 2; ++i) {
 				flags[i] = false;
 				int selectedIdx = rouletteWheelSelectionForChromosomes(fitness, instanceSize, &localState, totalFitness[0]);
-				if (fitness[selectedIdx] > fitness[tid + i])
+				if (!(elitism && tid + i == sharedFitnessIndex[0]) && fitness[selectedIdx] > fitness[tid + i])
 				{
 					flags[i] = true;
 					int* betterChromosome = population + selectedIdx * instanceSize;
@@ -282,11 +285,13 @@ namespace tsp {
 			}
 			__syncthreads();
 			// Crossover
-			PMX(chromosome[0], chromosome[1], instanceSize, &localState);
+			if (!(elitism && (tid == sharedFitnessIndex[0] || tid + 1 == sharedFitnessIndex[0])) && curand_uniform(&localState) < crossoverProbability) {
+				PMX(chromosome[0], chromosome[1], instanceSize, &localState);
+			}
 			__syncthreads();
 			// Mutation
 			for (int i = 0; i < 2; ++i) {
-				if (curand_uniform(&localState) > 0.7) {
+				if (!(elitism && tid + i == sharedFitnessIndex[0]) && curand_uniform(&localState) < mutationProbability) {
 					mutate(chromosome[i], instanceSize, &localState);
 				}
 			}
@@ -313,6 +318,8 @@ namespace tsp {
 			fitness[tid + 1] = calculateCycleWeight(chromosome[1], instance);
 			__syncthreads();
 		}
+
+		SumVectorForChromosomes(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
 
 		if (bid == 0)
 			bestFitness[blockIdx.x] = sharedFitnessIndex[0];

@@ -33,9 +33,9 @@ namespace tsp {
 		for (unsigned int chromosomeIndex = threadIdx.x / WARP_SIZE; chromosomeIndex < islandPopulationSize; chromosomeIndex += (blockDim.x / WARP_SIZE)) {
 			gene* chromosome = population + (blockIdx.x * 2 * islandPopulationSize + chromosomeIndex) * nWarpSizeAligned;
 
-			initializeCycle(chromosome, n, globalState + tid);
+			warpInitializeCycle(chromosome, n, globalState + tid);
 
-			unsigned int thisCycleWeight = calculateCycleWeight(chromosome, instance);
+			unsigned int thisCycleWeight = warpCalculateCycleWeight(chromosome, instance);
 			if (lid == 0) s_cycleWeight[chromosomeIndex] = thisCycleWeight;
 		}
 
@@ -87,7 +87,7 @@ namespace tsp {
 	template <typename Instance, typename gene>
 	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, gene* population, unsigned int islandPopulationSize, 
 		unsigned int iterationCount, bool elitism, float crossoverProbability, float mutationProbability, 
-		unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer) 
+		unsigned int* cycleWeight, unsigned int *islandBest, unsigned int *islandWorst, bool *sourceInSecondBuffer, unsigned int stalledIsolatedIterationsLimit) 
 	{
 		extern __shared__ unsigned int s_buffer[];
 		unsigned int* s_reductionBuffer = s_buffer;
@@ -100,6 +100,7 @@ namespace tsp {
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
 		bool thisSourceInSecondBuffer = sourceInSecondBuffer[blockIdx.x];
+		unsigned int islandPrevBestCycleWeight = (unsigned int)-1, stalledIsolatedIterationsCounter = 0;
 
 		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x)
 			s_cycleWeight[chromosomeIndex] = cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex];
@@ -108,7 +109,7 @@ namespace tsp {
 
 		__syncthreads();
 
-		while (iterationCount-- > 0) {
+		while (iterationCount-- > 0 && stalledIsolatedIterationsCounter < stalledIsolatedIterationsLimit) {
 
 			unsigned int islandBestIndex = *s_islandBestIndex;
 			unsigned int islandWorstIndex = *s_islandWorstIndex;
@@ -162,7 +163,7 @@ namespace tsp {
 				}
 
 				// Fitness : chromosomeA
-				thisCycleWeight = calculateCycleWeight(chromosomeA, instance);
+				thisCycleWeight = warpCalculateCycleWeight(chromosomeA, instance);
 				if (lid == 0) s_cycleWeight[chromosomeIndex] = thisCycleWeight;
 
 				if (chromosomeIndex + 1 < islandPopulationSize) {
@@ -174,7 +175,7 @@ namespace tsp {
 					}
 
 					// Fitness : chromosomeB
-					thisCycleWeight = calculateCycleWeight(chromosomeB, instance);
+					thisCycleWeight = warpCalculateCycleWeight(chromosomeB, instance);
 					if (lid == 0) s_cycleWeight[chromosomeIndex + 1] = thisCycleWeight;
 				}
 			}
@@ -185,6 +186,14 @@ namespace tsp {
 			findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, s_islandBestIndex, s_islandWorstIndex);
 
 			__syncthreads();
+
+			unsigned int islandCurrBestCycleWeight = s_cycleWeight[*s_islandBestIndex];
+			if (islandPrevBestCycleWeight == islandCurrBestCycleWeight) {
+				stalledIsolatedIterationsCounter++;
+			} else {
+				stalledIsolatedIterationsCounter = 0;
+			}
+			islandPrevBestCycleWeight = islandCurrBestCycleWeight;
 		}
 
 		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x)
@@ -199,29 +208,6 @@ namespace tsp {
 				islandWorst[blockIdx.x] = *s_islandWorstIndex;
 			}
 			sourceInSecondBuffer[blockIdx.x] = thisSourceInSecondBuffer;
-		}
-	}
-
-	void updateStalledMigrationsCount(unsigned int &stalledMigrationsCount, unsigned int &stalledBestCycleWeight, 
-		const unsigned int *h_cycleWeight, const unsigned int *h_islandBest, unsigned int islandCount, unsigned int islandPopulationSize) 
-	{
-		bool stable = true;
-		unsigned int firstBestCycleWeight = h_cycleWeight[h_islandBest[0]];
-		for (unsigned int i = 1; i < islandCount; i++) {
-			if (firstBestCycleWeight != h_cycleWeight[i * islandPopulationSize + h_islandBest[i]]) {
-				stable = false;
-				break;
-			}
-		}
-		if (stable) {
-			if (firstBestCycleWeight != stalledBestCycleWeight) {
-				stalledBestCycleWeight = firstBestCycleWeight;
-				stalledMigrationsCount = 0;
-			}
-			stalledMigrationsCount++;
-		} else {
-			stalledBestCycleWeight = (unsigned int)-1;
-			stalledMigrationsCount = 0;
 		}
 	}
 
@@ -340,7 +326,7 @@ namespace tsp {
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
 				instance, d_globalState, d_population, options.islandPopulationSize, 
 				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability, 
-				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
+				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer, options.stalledIsolatedIterationsLimit
 			);
 
 			if ((status = cudaGetLastError()) != cudaSuccess) {

@@ -223,7 +223,7 @@ namespace tsp {
 
 		for (int i = 0; i < numerOfIslands; ++i)
 		{
-			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, maxIteration, maxIterationStop);
+			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, maxIteration, maxIterationStop, 0.9, 0.3, false);
 
 			if (cudaDeviceSynchronize() != cudaSuccess)
 				return -1;

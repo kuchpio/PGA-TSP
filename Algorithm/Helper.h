@@ -18,6 +18,7 @@ namespace tsp {
 		float crossoverProbability;
 		float mutationProbability;
 		bool elitism;
+		unsigned int stalledIsolatedIterationsLimit;
 		unsigned int stalledMigrationsLimit;
 	};
 
@@ -146,6 +147,57 @@ namespace tsp {
 				}
 			}
 		}
+	}
+
+	void updateStalledMigrationsCount(unsigned int &stalledMigrationsCount, unsigned int &stalledBestCycleWeight, 
+		const unsigned int *h_cycleWeight, const unsigned int *h_islandBest, unsigned int islandCount, unsigned int islandPopulationSize) 
+	{
+		bool stable = true;
+		unsigned int firstBestCycleWeight = h_cycleWeight[h_islandBest[0]];
+		for (unsigned int i = 1; i < islandCount; i++) {
+			if (firstBestCycleWeight != h_cycleWeight[i * islandPopulationSize + h_islandBest[i]]) {
+				stable = false;
+				break;
+			}
+		}
+		if (stable) {
+			if (firstBestCycleWeight != stalledBestCycleWeight) {
+				stalledBestCycleWeight = firstBestCycleWeight;
+				stalledMigrationsCount = 0;
+			}
+			stalledMigrationsCount++;
+		} else {
+			stalledBestCycleWeight = (unsigned int)-1;
+			stalledMigrationsCount = 0;
+		}
+	}
+
+	template<typename gene>
+	bool verifyResults(const tsp::IHostInstance* instance, gene* bestCycle, unsigned int bestCycleWeight)
+	{
+		unsigned int n = instance->size();
+		bool* visited = new bool[n] { false };
+		unsigned int verifiedCycleWeight = instance->edgeWeight(bestCycle[n - 1], bestCycle[0]);
+		visited[bestCycle[n - 1]] = true;
+
+		for (unsigned int i = 0; i < n - 1; i++) {
+			if (visited[bestCycle[i]]) {
+				std::cout << "VERIFICATION: Cycle is not hamiltonian. Vertex " << bestCycle[i] << " repeated.\n";
+				delete[] visited;
+				return false;
+			}
+			verifiedCycleWeight += instance->edgeWeight(bestCycle[i], bestCycle[i + 1]);
+			visited[bestCycle[i]] = true;
+		}
+
+		if (bestCycleWeight != verifiedCycleWeight) {
+			std::cout << "VERIFICATION: Cycle has different length (" << verifiedCycleWeight << ") than returned best cycle length (" << bestCycleWeight << ").\n";
+			delete[] visited;
+			return false;
+		}
+
+		delete[] visited;
+		return true;
 	}
 
 }

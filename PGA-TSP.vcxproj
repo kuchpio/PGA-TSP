@@ -87,6 +87,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Algorithm\CoarseGrained.h" />
     <ClInclude Include="Algorithm\CycleHelper.h" />
     <ClInclude Include="Algorithm\WarpCycleHelper.h" />
     <ClInclude Include="Algorithm\FineGrained.h" />
