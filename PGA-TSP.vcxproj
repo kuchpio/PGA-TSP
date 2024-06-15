@@ -87,6 +87,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Algorithm\CycleHelper.h" />
     <ClInclude Include="Algorithm\WarpCycleHelper.h" />
     <ClInclude Include="Algorithm\FineGrained.h" />
     <ClInclude Include="Algorithm\BlockSwap.h" />
@@ -97,6 +98,7 @@
     <ClInclude Include="Crossovers\WarpPMX.h" />
     <ClInclude Include="Crossovers\PMX.h" />
     <ClInclude Include="Instance\GlobalMemoryInstance.h" />
+    <ClInclude Include="Instance\Helper.h" />
     <ClInclude Include="Instance\HostInstance.h" />
     <ClInclude Include="Instance\InstanceReader.h" />
     <ClInclude Include="Instance\Metric.h" />

@@ -5,8 +5,9 @@
 #include <device_launch_parameters.h>
 
 #include "Helper.h"
-#define MAX_DISTANCE_CAN 1000000
+
 namespace tsp {
+
 	typedef struct GlobalMemoryInstance {
 		int* d_adjecencyMatrix = NULL;
 		int size = 0;
@@ -56,16 +57,6 @@ namespace tsp {
 		return instance.d_adjecencyMatrix[from * size(instance) + to];
 	}
 
-	__device__
-		int hamiltonianCycleWeight(const GlobalMemoryInstance instance, const int* cycle) {
-		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
-
-		for (int i = 0; i < size(instance) - 1; i++) {
-			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
-		}
-
-		return MAX_DISTANCE_CAN - sum;
-	}
 }
 
 #endif

@@ -57,6 +57,8 @@
     <ClInclude Include="Crossovers\PMX.h" />
     <ClInclude Include="Algorithm\VectorReduction.h" />
     <ClInclude Include="Algorithm\BlockSwap.h" />
+    <ClInclude Include="Instance\Helper.h" />
+    <ClInclude Include="Algorithm\CycleHelper.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />

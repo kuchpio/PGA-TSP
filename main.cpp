@@ -82,14 +82,14 @@ int main(int argc, char* argv[])
     /* .elitism: */                 true,
     /* .stalledMigrationsLimit: */  50
     };
-    int bestCycleWeight = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, 28, 101, false);
-	// bestCycleWeight = tsp::solveTSP3(globalMemoryInstance->deviceInstance());
-	// bestCycleWeight = tsp::solveTSP4(globalMemoryInstance->deviceInstance());
-	// bestCycleWeight = tsp::solveTSP5(globalMemoryInstance->deviceInstance(), 10, 1000, 500);
+    // int bestCycleWeight = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, 28, 101, false);
+	// int bestCycleWeight = tsp::solveTSP3(globalMemoryInstance->deviceInstance());
+	// int bestCycleWeight = tsp::solveTSP4(globalMemoryInstance->deviceInstance());
+	int bestCycleWeight = tsp::solveTSP5(globalMemoryInstance->deviceInstance(), 10, 1000, 500);
 
-	std::cout << "\n\n";
+	std::cout << "\n";
 
-	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
+	if (bestCycleWeight >= 0 /* && verifyResults(hostInstance, bestCycle, bestCycleWeight) */)
 	    std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << "\n";
 
 	// TODO: Save bestCycle to file

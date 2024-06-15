@@ -6,8 +6,8 @@
 #include <curand_kernel.h>
 #include <iomanip>
 
-#include "../Algorithm/Helper.h"
-#include "../Algorithm/WarpCycleHelper.h"
+#include "Helper.h"
+#include "WarpCycleHelper.h"
 #include "../Selections/WarpRouletteWheel.h"
 #include "../Crossovers/WarpPMX.h"
 #include "../Mutations/WarpInterval.h"
@@ -16,17 +16,6 @@
 #define FULL_MASK 0xffffffff
 
 namespace tsp {
-
-	struct IslandGeneticAlgorithmOptions {
-		unsigned int islandCount;
-		unsigned int islandPopulationSize;
-		unsigned int isolatedIterationCount;
-		unsigned int migrationCount;
-		float crossoverProbability;
-		float mutationProbability;
-		bool elitism;
-		unsigned int stalledMigrationsLimit;
-	};
 
 	template <typename Instance, typename gene>
 	__global__ void initializationKernel(const Instance instance, curandState* globalState, gene* population, unsigned int islandPopulationSize, 

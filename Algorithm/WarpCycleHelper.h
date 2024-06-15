@@ -11,7 +11,7 @@
 namespace tsp {
 
 	template <typename vertex>
-	__device__ __forceinline__ void initializeCycle(vertex* cycle, unsigned int n, curandState *state) 
+	__device__ __forceinline__ void warpInitializeCycle(vertex* cycle, unsigned int n, curandState *state) 
 	{
 		vertex lid = (blockDim.x * blockIdx.x + threadIdx.x) & (WARP_SIZE - 1);
 
@@ -19,6 +19,7 @@ namespace tsp {
 			cycle[i] = i;
 
 		if (lid == 0) {
+			// Fisher-Yates shuffle algorithm
 			for (unsigned int i = n - 1; i > 0; i--) {
 				unsigned int j = curand(state) % (i + 1);
 
@@ -31,7 +32,7 @@ namespace tsp {
 	}
 
 	template <typename Instance, typename vertex>
-	__device__ __forceinline__ unsigned int calculateCycleWeight(const vertex* cycle, const Instance instance) 
+	__device__ __forceinline__ unsigned int warpCalculateCycleWeight(const vertex* cycle, const Instance instance) 
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int lidShfl = (lid + 1) & (WARP_SIZE - 1);

@@ -10,6 +10,7 @@
 #include <thrust/fill.h>
 
 #include "Helper.h"
+#include "CycleHelper.h"
 #include "../Selections/Basic.h"
 #include "../Crossovers/Basic.h"
 #include "../Mutations/Basic.h"
@@ -25,8 +26,8 @@ namespace tsp {
 		int* chromosome = population + tid * instanceSize;
 		int* result = new int[instanceSize];
 
-		initChromosome(chromosome, instanceSize, &localState);
-		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+		initializeCycle(chromosome, instanceSize, &localState);
+		fitness[tid] = calculateCycleWeight(chromosome, instance);
 
 		for (int i = 0; i < maxIterations; i++) {
 			// Selection
@@ -50,7 +51,7 @@ namespace tsp {
 			mutate(chromosome, instanceSize, &localState);
 
 			// Fitness
-			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+			fitness[tid] = calculateCycleWeight(chromosome, instance);
 		}
 
 		delete[] result;

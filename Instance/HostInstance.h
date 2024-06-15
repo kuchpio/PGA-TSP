@@ -10,7 +10,6 @@ namespace tsp {
     public:
         virtual int size() const = 0;
         virtual int edgeWeight(const int from, const int to) const = 0;
-        virtual int hamiltonianCycleWeight(const int* cycle) const = 0;
     };
 
     class HostMemoryInstance : public IHostInstance {
@@ -39,16 +38,6 @@ namespace tsp {
             return this->_adjecencyMatrix[from * this->_size + to];
         }
 
-        int hamiltonianCycleWeight(const int* cycle) const override {
-            int sum = this->edgeWeight(this->_size - 1, 0);
-
-            for (int i = 0; i < this->_size - 1; i++) {
-                sum += this->edgeWeight(i, i + 1);
-            }
-
-            return sum;
-        }
-
         ~HostMemoryInstance() {
             delete[] this->_adjecencyMatrix;
         }
@@ -64,12 +53,6 @@ namespace tsp {
 	__global__
 		void edgeWeightKernel(const DeviceInstance deviceInstance, const int from, const int to, int* out) {
 		*out = edgeWeight(deviceInstance, from, to);
-	}
-
-	template<class DeviceInstance>
-	__global__
-		void hamiltonianCycleWeightKernel(const DeviceInstance deviceInstance, const int* cycle, int* out) {
-		*out = hamiltonianCycleWeight(deviceInstance, cycle);
 	}
 
     template<typename DeviceInstance>
@@ -145,49 +128,6 @@ namespace tsp {
             }
 
             cudaFree(d_weight);
-
-            return h_weight;
-        }
-
-        int hamiltonianCycleWeight(const int* cycle) const override {
-            cudaError_t status;
-            int* d_cycle, * d_weight, h_weight;
-            int size = this->size();
-
-            if ((status = cudaMalloc(&d_weight, sizeof(int))) != cudaSuccess) {
-                std::cerr << "Could not allocate device weight output variable (" <<
-                    cudaGetErrorString(status) << ").\n";
-                return -1;
-            }
-
-            if ((status = cudaMalloc(&d_cycle, size * sizeof(int))) != cudaSuccess) {
-                std::cerr << "Could not allocate device cycle variable (" <<
-                    cudaGetErrorString(status) << ").\n";
-                return -1;
-            }
-
-            if ((status = cudaMemcpy(d_cycle, cycle, size * sizeof(int), cudaMemcpyHostToDevice)) != cudaSuccess) {
-                std::cerr << "Could not copy device memory weight to device (" <<
-                    cudaGetErrorString(status) << ").\n";
-                return -1;
-            }
-
-            hamiltonianCycleWeightKernel << <1, 1 >> > (this->_deviceInstance, (const int*)d_cycle, d_weight);
-
-            if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
-                std::cerr << "Could not synchronize device (" <<
-                    cudaGetErrorString(status) << ").\n";
-                return -1;
-            }
-
-            if ((status = cudaMemcpy(&h_weight, d_weight, sizeof(int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
-                std::cerr << "Could not copy device memory weight to device (" <<
-                    cudaGetErrorString(status) << ").\n";
-                return -1;
-            }
-
-            cudaFree(d_weight);
-            cudaFree(d_cycle);
 
             return h_weight;
         }

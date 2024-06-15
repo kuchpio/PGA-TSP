@@ -12,8 +12,6 @@
 
 #include "Helper.h"
 
-#define MAX_DISTANCE_CAN 1000000
-
 namespace tsp {
 	typedef struct TextureMemoryInstance {
 		cudaTextureObject_t textureObject = 0;
@@ -92,16 +90,6 @@ namespace tsp {
 		return tex2D<int>(instance.textureObject, from, to);
 	}
 
-	__device__
-		int hamiltonianCycleWeight(const TextureMemoryInstance instance, const int* cycle) {
-		int sum = edgeWeight(instance, cycle[size(instance) - 1], cycle[0]);
-
-		for (int i = 0; i < size(instance) - 1; i++) {
-			sum += edgeWeight(instance, cycle[i], cycle[i + 1]);
-		}
-
-		return MAX_DISTANCE_CAN - sum;
-	}
 }
 
 #endif

@@ -6,6 +6,7 @@
 #include <curand_kernel.h>
 
 #include "Helper.h"
+#include "CycleHelper.h"
 #include "../Selections/Basic.h"
 #include "../Crossovers/Interval.h"
 #include "../Crossovers/PMX.h"
@@ -24,8 +25,8 @@ namespace tsp {
 		curandState localState = globalState[tid];
 		int* chromosome = population + tid * instanceSize;
 
-		initChromosome(chromosome, instanceSize, &localState);
-		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+		initializeCycle(chromosome, instanceSize, &localState);
+		fitness[tid] = calculateCycleWeight(chromosome, instance);
 		__syncthreads();
 
 		int* result = new int[instanceSize];
@@ -53,7 +54,7 @@ namespace tsp {
 			if (curand_uniform(&localState) > 0.9) { // 10% chance of mutation
 				mutate(chromosome, instanceSize, &localState);
 			}
-			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+			fitness[tid] = calculateCycleWeight(chromosome, instance);
 		}
 
 		globalState[tid] = localState;
@@ -68,8 +69,8 @@ namespace tsp {
 		int* chromosome = population + tid * instanceSize;
 		int* result = new int[instanceSize];
 
-		initChromosome(chromosome, instanceSize, &localState);
-		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+		initializeCycle(chromosome, instanceSize, &localState);
+		fitness[tid] = calculateCycleWeight(chromosome, instance);
 		__syncthreads();
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
@@ -90,7 +91,7 @@ namespace tsp {
 			if (curand_uniform(&localState) > 0.9) { // 10% chance of mutation
 				mutate(chromosome, instanceSize, &localState);
 			}
-			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+			fitness[tid] = calculateCycleWeight(chromosome, instance);
 			__syncthreads(); // Synchronize after mutation
 		}
 
@@ -110,8 +111,8 @@ namespace tsp {
 		int* chromosome = population + tid * instanceSize;
 		int* result = new int[instanceSize];
 
-		initChromosome(chromosome, instanceSize, &localState);
-		fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+		initializeCycle(chromosome, instanceSize, &localState);
+		fitness[tid] = calculateCycleWeight(chromosome, instance);
 		__syncthreads();
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
@@ -140,7 +141,7 @@ namespace tsp {
 			if (curand_uniform(&localState) > 0.9 && bid != sharedIndexes[0]) { // 10% chance of mutation
 				mutate(chromosome, instanceSize, &localState);
 			}
-			fitness[tid] = hamiltonianCycleWeight(instance, chromosome);
+			fitness[tid] = calculateCycleWeight(chromosome, instance);
 			__syncthreads();
 		}
 
@@ -162,8 +163,8 @@ namespace tsp {
 		result[1] = new int[instanceSize];
 		bool flags[] = { false, false };
 		for (int i = 0; i < 2; ++i) {
-			initChromosome(chromosome[i], instanceSize, &localState);
-			fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+			initializeCycle(chromosome[i], instanceSize, &localState);
+			fitness[tid + i] = calculateCycleWeight(chromosome[i], instance);
 		}
 		__syncthreads();
 
@@ -200,7 +201,7 @@ namespace tsp {
 				if (curand_uniform(&localState) > 0.7) { // 10% chance of mutation
 					mutate(chromosome[i], instanceSize, &localState);
 				}
-				fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+				fitness[tid + i] = calculateCycleWeight(chromosome[i], instance);
 			}
 			__syncthreads(); // Synchronize after mutation
 		}
@@ -236,8 +237,8 @@ namespace tsp {
 
 		if (fitness[tid] == -1) {
 			for (int i = 0; i < 2; ++i) {
-				initChromosome(chromosome[i], instanceSize, &localState);
-				fitness[tid + i] = hamiltonianCycleWeight(instance, chromosome[i]);
+				initializeCycle(chromosome[i], instanceSize, &localState);
+				fitness[tid + i] = calculateCycleWeight(chromosome[i], instance);
 			}
 		}
 
@@ -308,8 +309,8 @@ namespace tsp {
 				chromosome[0] = population + tid * instanceSize;
 			}
 
-			fitness[tid] = hamiltonianCycleWeight(instance, chromosome[0]);
-			fitness[tid + 1] = hamiltonianCycleWeight(instance, chromosome[1]);
+			fitness[tid] = calculateCycleWeight(chromosome[0], instance);
+			fitness[tid + 1] = calculateCycleWeight(chromosome[1], instance);
 			__syncthreads();
 		}
 
