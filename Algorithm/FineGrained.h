@@ -162,14 +162,14 @@ namespace tsp {
 					(!elitism || (chromosomeIndex != islandBestIndex && chromosomeIndex + 1 != islandBestIndex)) && 
 					crossoverProbability > curand_uniform(globalState + tid);
 				if (__shfl_sync(FULL_MASK, performCrossover, 0)) {
-					crossoverCoalescedWarp(chromosomeA, chromosomeB, size(instance), globalState + tid);
+					warpPMXCoalescedFix(chromosomeA, chromosomeB, size(instance), globalState + tid);
 				}
 
 				// Mutation : chromosomeA
 				if (lid == 0) performMutation = (!elitism || chromosomeIndex != islandBestIndex) && 
 					mutationProbability > curand_uniform(globalState + tid);
 				if (__shfl_sync(FULL_MASK, performMutation, 0)) {
-					mutate(chromosomeA, size(instance), globalState + tid);
+					warpIntervalMutate(chromosomeA, size(instance), globalState + tid);
 				}
 
 				// Fitness : chromosomeA
@@ -181,7 +181,7 @@ namespace tsp {
 					if (lid == 0) performMutation = (!elitism || chromosomeIndex + 1 != islandBestIndex) && 
 						mutationProbability > curand_uniform(globalState + tid);
 					if (__shfl_sync(FULL_MASK, performMutation, 0)) {
-						mutate(chromosomeB, size(instance), globalState + tid);
+						warpIntervalMutate(chromosomeB, size(instance), globalState + tid);
 					}
 
 					// Fitness : chromosomeB

@@ -16,6 +16,33 @@ void usage(std::string programName) {
 		"\t - TSPLIB95 (see http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf)\n";
 }
 
+bool verifyResults(const tsp::IHostInstance* instance, unsigned short* bestCycle, unsigned int bestCycleWeight)
+{
+	unsigned int n = instance->size();
+	bool* visited = new bool[n] { false };
+	unsigned int verifiedCycleWeight = instance->edgeWeight(bestCycle[n - 1], bestCycle[0]);
+	visited[bestCycle[n - 1]] = true;
+
+	for (unsigned int i = 0; i < n - 1; i++) {
+		if (visited[bestCycle[i]]) {
+			std::cout << "VERIFICATION: Cycle is not hamiltonian. Vertex " << bestCycle[i] << " repeated.\n";
+			delete[] visited;
+			return false;
+		}
+		verifiedCycleWeight += instance->edgeWeight(bestCycle[i], bestCycle[i + 1]);
+		visited[bestCycle[i]] = true;
+	}
+
+	if (bestCycleWeight != verifiedCycleWeight) {
+		std::cout << "VERIFICATION: Cycle has different length (" << verifiedCycleWeight << ") than returned best cycle length (" << bestCycleWeight << ").\n";
+		delete[] visited;
+		return false;
+	}
+
+	delete[] visited;
+	return true;
+}
+
 int main(int argc, char* argv[])
 {
 	std::string programName = argv[0];
@@ -42,30 +69,9 @@ int main(int argc, char* argv[])
 	auto* globalMemoryInstance = instanceReader.createDeviceInstance<tsp::GlobalMemoryInstance>();
 	auto* textureMemoryInstance = instanceReader.createDeviceInstance<tsp::TextureMemoryInstance>();
 
-	int* canonicalCycle = new int[hostInstance->size()];
-	std::iota(canonicalCycle, canonicalCycle + hostInstance->size(), 0);
+	std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n\n";
 
-	std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n";
-
-	std::cout << "CANONICAL CYCLE TOTAL DISTANCE (host): " <<
-		hostInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
-
-	std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device global memory): " <<
-		globalMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
-
-	std::cout << "CANONICAL CYCLE TOTAL DISTANCE (device texture memory): " <<
-		textureMemoryInstance->hamiltonianCycleWeight(canonicalCycle) << "\n";
-
-	int opt = tsp::solveTSP5(globalMemoryInstance->deviceInstance(), 10, 1000, 500);
-	std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";
-	/*opt = tsp::solveTSP3(globalMemoryInstance->deviceInstance());
-
-	std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";
-	opt = tsp::solveTSP4(globalMemoryInstance->deviceInstance());
-
-	std::cout << "Optimal hamiltonian cycle length found: " << opt << "\n";*/
-  
-    unsigned short *optimalCycle = new unsigned short[globalMemoryInstance->size()];
+    unsigned short *bestCycle = new unsigned short[globalMemoryInstance->size()];
     tsp::IslandGeneticAlgorithmOptions options = {
     /* .islandCount: */             8,
     /* .islandPopulationSize: */    100,
@@ -76,35 +82,22 @@ int main(int argc, char* argv[])
     /* .elitism: */                 true,
     /* .stalledMigrationsLimit: */  50
     };
-    int opt = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, optimalCycle, 28, 101, true);
+    int bestCycleWeight = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, 28, 101, false);
+	// bestCycleWeight = tsp::solveTSP3(globalMemoryInstance->deviceInstance());
+	// bestCycleWeight = tsp::solveTSP4(globalMemoryInstance->deviceInstance());
+	// bestCycleWeight = tsp::solveTSP5(globalMemoryInstance->deviceInstance(), 10, 1000, 500);
 
-    std::cout << "\n\nOptimal hamiltonian cycle length found: " << opt << "\n";
+	std::cout << "\n\n";
 
-    // Verification
-    {
-        unsigned int n = globalMemoryInstance->size();
-        bool* visited = new bool[n] { false };
-        unsigned int verifiedCycleWeight = hostInstance->edgeWeight(optimalCycle[n - 1], optimalCycle[0]);
-        visited[optimalCycle[n - 1]] = true;
+	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
+	    std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << "\n";
 
-		for (unsigned int i = 0; i < n - 1; i++) {
-            if (visited[optimalCycle[i]]) {
-                std::cout << "Vertex " << optimalCycle[i] << " repeated.\n";
-            }
-			verifiedCycleWeight += hostInstance->edgeWeight(optimalCycle[i], optimalCycle[i + 1]);
-            visited[optimalCycle[i]] = true;
-		}
-
-        std::cout << "\n\nOptimal hamiltonian cycle length verified: " << verifiedCycleWeight << "\n";
-
-        delete[] visited;
-    }
+	// TODO: Save bestCycle to file
 
     delete hostInstance;
     delete globalMemoryInstance;
     delete textureMemoryInstance;
-    delete[] canonicalCycle;
-    delete[] optimalCycle;
+    delete[] bestCycle;
 
 	if (cudaDeviceReset() != cudaSuccess) {
 		std::cerr << "Could not reset device. \n";

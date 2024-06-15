@@ -13,7 +13,7 @@ namespace tsp{
     
 	template <typename gene>
 	__device__ __forceinline__ 
-	void mutate(gene* chromosome, unsigned int size, curandState* state)
+	void warpIntervalMutate(gene* chromosome, unsigned int size, curandState* state)
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end, geneIndex;
