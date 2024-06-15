@@ -57,6 +57,7 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <PtxAsOptionV>true</PtxAsOptionV>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -78,6 +79,7 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <PtxAsOptionV>true</PtxAsOptionV>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -85,6 +87,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Algorithm\WarpCycleHelper.h" />
     <ClInclude Include="Algorithm\FineGrained.h" />
     <ClInclude Include="Algorithm\Helper.h" />
     <ClInclude Include="Crossovers\Basic.h" />
@@ -100,6 +103,7 @@
     <ClInclude Include="Mutations\WarpInterval.h" />
     <ClInclude Include="Selections\Basic.h" />
     <ClInclude Include="Selections\RouleteWheel.h" />
+    <ClInclude Include="Selections\WarpRouletteWheel.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />

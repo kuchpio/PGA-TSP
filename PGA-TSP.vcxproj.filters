@@ -52,6 +52,8 @@
     <ClInclude Include="Algorithm\FineGrained.h" />
     <ClInclude Include="Mutations\WarpInterval.h" />
     <ClInclude Include="Crossovers\WarpPMX.h" />
+    <ClInclude Include="Selections\WarpRouletteWheel.h" />
+    <ClInclude Include="Algorithm\WarpCycleHelper.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />

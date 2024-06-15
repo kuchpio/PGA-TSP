@@ -9,8 +9,8 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>berlin52.tsp</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>pcb442.tsp</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <RemoteDebuggerCommandArguments>berlin52.tsp</RemoteDebuggerCommandArguments>
+    <RemoteDebuggerCommandArguments>pcb442.tsp</RemoteDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

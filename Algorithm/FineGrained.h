@@ -6,6 +6,9 @@
 #include <curand_kernel.h>
 #include <iomanip>
 
+#include "../Algorithm/Helper.h"
+#include "../Algorithm/WarpCycleHelper.h"
+#include "../Selections/WarpRouletteWheel.h"
 #include "../Crossovers/WarpPMX.h"
 #include "../Mutations/WarpInterval.h"
 
@@ -24,199 +27,6 @@ namespace tsp {
 		bool elitism;
 		unsigned int stalledMigrationsLimit;
 	};
-
-	template <typename vertex>
-	__device__ __forceinline__ void initializeCycle(vertex* cycle, unsigned int n, curandState *state) 
-	{
-		vertex lid = (blockDim.x * blockIdx.x + threadIdx.x) & (WARP_SIZE - 1);
-
-		for (vertex i = lid; i < n; i += WARP_SIZE) 
-			cycle[i] = i;
-
-		if (lid == 0) {
-			for (unsigned int i = n - 1; i > 0; i--) {
-				unsigned int j = curand(state) % (i + 1);
-
-				// Swap chromosome[i] with chromosome[j]
-				vertex temp = cycle[i];
-				cycle[i] = cycle[j];
-				cycle[j] = temp;
-			}
-		}
-	}
-
-	template <typename Instance, typename vertex>
-	__device__ __forceinline__ unsigned int calculateCycleWeight(const vertex* cycle, const Instance instance) 
-	{
-		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
-		unsigned int lidShfl = (lid + 1) & (WARP_SIZE - 1);
-		unsigned int n = size(instance);
-		unsigned int nWarpSizeAligned = (n & ~(WARP_SIZE - 1)) + WARP_SIZE;
-
-		unsigned int sum = 0;
-		vertex from = cycle[lid];
-		vertex to = __shfl_sync(FULL_MASK, from, lidShfl);
-		vertex first, last;
-
-		if (lid < WARP_SIZE - 1) {
-			sum += edgeWeight(instance, from, to);
-		} else {
-			first = to;
-			last = from;
-		}
-
-		for (unsigned int i = WARP_SIZE; i < nWarpSizeAligned - WARP_SIZE; i += WARP_SIZE) {
-			from = cycle[i + lid];
-			to = __shfl_sync(FULL_MASK, from, lidShfl);
-			sum += edgeWeight(instance, lid == WARP_SIZE - 1 ? last : from, to);
-			if (lid == WARP_SIZE - 1) last = from;
-		}
-
-		from = cycle[nWarpSizeAligned - WARP_SIZE + lid];
-		to = __shfl_sync(FULL_MASK, from, lidShfl);
-		if (nWarpSizeAligned - WARP_SIZE + lid < n - 1)
-			sum += edgeWeight(instance, from, to);
-
-		if (lid == WARP_SIZE - 1)
-			sum += edgeWeight(instance, last, to);
-
-		last = __shfl_sync(FULL_MASK, from, (n - 1) & (WARP_SIZE - 1));
-
-		if (lid == WARP_SIZE - 1)
-			sum += edgeWeight(instance, last, first);
-
-		for (unsigned int i = 1; i < WARP_SIZE; i *= 2) 
-			sum += __shfl_xor_sync(FULL_MASK, sum, i);
-
-		return sum;
-	}
-
-	__global__ void setupCurand(curandState* globalState, int seed) 
-	{
-		int tid = blockIdx.x * blockDim.x + threadIdx.x;
-		curand_init(seed, tid, 0, globalState + tid);
-	}
-
-	template <bool reduceMin = true, bool reduceMax = true>
-	__device__ __forceinline__ void findMinMax(const unsigned int* array, unsigned int arraySize, unsigned int* reductionBuffer, 
-		unsigned int minIndex, unsigned int maxIndex, unsigned int *minIndexOutput, unsigned int *maxIndexOutput) 
-	{
-		unsigned int blockWid = threadIdx.x / WARP_SIZE;			// Block warp id
-		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
-
-		unsigned int* reducedMin, * reducedMinIndex, * reducedMax, * reducedMaxIndex;
-		unsigned int min, max;
-
-		if (reduceMin) {
-			reducedMin = reductionBuffer;
-			reducedMinIndex = reducedMin + WARP_SIZE;
-			min = 0xffffffff;
-			minIndex = threadIdx.x;
-		}
-		if (reduceMax) {
-			reducedMax = reductionBuffer + (reduceMin ? 2 * WARP_SIZE : 0);
-			reducedMaxIndex = reducedMax + WARP_SIZE;
-			max = 0;
-			maxIndex = threadIdx.x;
-		}
-
-		// 1. Block stride loop thread reduction
-		for (unsigned int chromosomeIndex = threadIdx.x; chromosomeIndex < arraySize; chromosomeIndex += blockDim.x) {
-			unsigned int value = array[chromosomeIndex];
-			if (reduceMin && min > value) {
-				min = value;
-				minIndex = chromosomeIndex;
-			}
-			if (reduceMax && max < value) {
-				max = value;
-				maxIndex = chromosomeIndex;
-			}
-		}
-
-		// 2. Warp reduction in each warp
-		unsigned int minShuf, minIndexShuf, maxShuf, maxIndexShuf;
-		for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-			if (reduceMin) {
-				minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-				minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-				if (min > minShuf) {
-					minIndex = minIndexShuf;
-					min = minShuf;
-				}
-			}
-
-			if (reduceMax) {
-				maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-				maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-				if (max < maxShuf) {
-					maxIndex = maxIndexShuf;
-					max = maxShuf;
-				}
-			}
-
-		}
-
-		if (lid == 0) {
-			if (reduceMin) {
-				reducedMin[blockWid] = min;
-				reducedMinIndex[blockWid] = minIndex;
-			}
-			if (reduceMax) {
-				reducedMax[blockWid] = max;
-				reducedMaxIndex[blockWid] = maxIndex;
-			}
-		}
-
-		__syncthreads();
-
-		// 3. Warp reduction of reduced results
-		if (blockWid == 0) {
-
-			if (reduceMin) {
-				min = reducedMin[lid];
-				minIndex = reducedMinIndex[lid];
-				if (lid >= blockDim.x / WARP_SIZE) min = 0xffffffff;
-			}
-			if (reduceMax) {
-				max = reducedMax[lid];
-				maxIndex = reducedMaxIndex[lid];
-				if (lid >= blockDim.x / WARP_SIZE) max = 0;
-			}
-
-			for (int i = 1; i < WARP_SIZE; i *= 2) {
-
-				if (reduceMin) {
-					minShuf = __shfl_xor_sync(FULL_MASK, min, i);
-					minIndexShuf = __shfl_xor_sync(FULL_MASK, minIndex, i);
-					if (min > minShuf) {
-						minIndex = minIndexShuf;
-						min = minShuf;
-					}
-				}
-
-				if (reduceMax) {
-					maxShuf = __shfl_xor_sync(FULL_MASK, max, i);
-					maxIndexShuf = __shfl_xor_sync(FULL_MASK, maxIndex, i);
-					if (max < maxShuf) {
-						maxIndex = maxIndexShuf;
-						max = maxShuf;
-					}
-				}
-
-			}
-
-			if (lid == 0) {
-				if (minIndex == maxIndex) {
-					*minIndexOutput = 0;
-					*maxIndexOutput = arraySize - 1;
-				} else {
-					*minIndexOutput = minIndex;
-					*maxIndexOutput = maxIndex;
-				}
-			}
-		}
-	}
 
 	template <typename Instance, typename gene>
 	__global__ void initializationKernel(const Instance instance, curandState* globalState, gene* population, unsigned int islandPopulationSize, 
@@ -285,77 +95,6 @@ namespace tsp {
 			dstChromosome[i] = srcChromosome[i];
 	}
 
-	__device__ __forceinline__ float createRoulletteWheel(unsigned int islandBestIndex, unsigned int islandWorstIndex, 
-		unsigned int islandPopulationSize, unsigned int *cycleWeight, float *roulletteWheelThreshold) 
-	{
-		float *reducedRoulletteWheelThresholdSum = roulletteWheelThreshold + islandPopulationSize;
-
-		unsigned int blockWid = threadIdx.x / WARP_SIZE;			// Block warp id
-		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
-
-		unsigned int min = cycleWeight[islandBestIndex];
-		unsigned int max = cycleWeight[islandWorstIndex];
-
-		float intervalWidthSum = 0.0f;
-		for (unsigned int baseOffset = blockWid * WARP_SIZE; baseOffset < islandPopulationSize; baseOffset += blockDim.x) {
-			float intervalWidth = 0.0f, intervalWidthShfl;
-			if (baseOffset + lid < islandPopulationSize)
-				intervalWidth = min == max ? 1.0f : ((float)(max - cycleWeight[baseOffset + lid])) / ((float)(max - min));
-
-			// Warp scan to get partial prefix sums
-			for (unsigned int i = 1; i < WARP_SIZE; i *= 2) {
-				intervalWidthShfl = __shfl_up_sync(FULL_MASK, intervalWidth, i);
-				if (lid >= i) intervalWidth += intervalWidthShfl;
-			}
-
-			if (baseOffset + lid < islandPopulationSize)
-				roulletteWheelThreshold[baseOffset + lid] = intervalWidth;
-
-			if (lid == WARP_SIZE - 1)
-				intervalWidthSum += intervalWidth;
-		}
-
-		if (lid == WARP_SIZE - 1) {
-			reducedRoulletteWheelThresholdSum[blockWid] = intervalWidthSum;
-		}
-
-		__syncthreads();
-
-		if (blockWid == 0) {
-			intervalWidthSum = reducedRoulletteWheelThresholdSum[lid];
-			if (lid >= blockDim.x / WARP_SIZE) intervalWidthSum = 0.0f;
-			for (unsigned int i = 1; i < WARP_SIZE; i *= 2) 
-				intervalWidthSum += __shfl_xor_sync(FULL_MASK, intervalWidthSum, i);
-			reducedRoulletteWheelThresholdSum[lid] = intervalWidthSum;
-		}
-
-		__syncthreads();
-
-		return reducedRoulletteWheelThresholdSum[0];
-	}
-	
-	__device__ __forceinline__ unsigned int selectIndex(curandState *localState, float *roulletteWheelThreshold, float maxThreshold, unsigned int islandPopulationSize) 
-	{
-		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
-
-		float rnd;
-		if (lid == 0) rnd = curand_uniform(localState) * maxThreshold;
-		rnd = __shfl_sync(FULL_MASK, rnd, 0);
-
-		for (unsigned int baseOffset = 0; baseOffset < islandPopulationSize; baseOffset += WARP_SIZE) {
-
-			float threshold = baseOffset + lid < islandPopulationSize ? 
-				roulletteWheelThreshold[baseOffset + lid] : roulletteWheelThreshold[islandPopulationSize - 1];
-
-			unsigned int thresholdLid = __clz(~(__ballot_sync(FULL_MASK, rnd <= threshold)));
-			if (thresholdLid) return baseOffset + WARP_SIZE - thresholdLid;
-
-			rnd -= __shfl_sync(FULL_MASK, threshold, WARP_SIZE - 1);
-		}
-		
-		return islandPopulationSize - 1; // Unreachable
-	}
-
 	template <typename Instance, typename gene>
 	__global__ void islandEvolutionKernel(const Instance instance, curandState* globalState, gene* population, unsigned int islandPopulationSize, 
 		unsigned int iterationCount, bool elitism, float crossoverProbability, float mutationProbability, 
@@ -369,7 +108,6 @@ namespace tsp {
 		float *s_roulletteWheelThreshold = (float*)(s_cycleWeight + islandPopulationSize + 2);
 
 		unsigned int tid = blockDim.x * blockIdx.x + threadIdx.x;	// Global thread id
-		unsigned int blockWarpCount = blockDim.x / WARP_SIZE;		// Block warp count
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);			// Warp thread id
 		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
 		bool thisSourceInSecondBuffer = sourceInSecondBuffer[blockIdx.x];
@@ -390,7 +128,7 @@ namespace tsp {
 			{
 				float maxThreshold = createRoulletteWheel(islandBestIndex, islandWorstIndex, islandPopulationSize, s_cycleWeight, s_roulletteWheelThreshold);
 
-				for (unsigned int chromosomeIndex = threadIdx.x / WARP_SIZE; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockWarpCount) {
+				for (unsigned int chromosomeIndex = threadIdx.x / WARP_SIZE; chromosomeIndex < islandPopulationSize; chromosomeIndex += blockDim.x / WARP_SIZE) {
 
 					// Select lane id based on roullette wheel selection
 					unsigned int selectedIndex = elitism && chromosomeIndex == islandBestIndex ? chromosomeIndex : 
@@ -411,7 +149,7 @@ namespace tsp {
 
 			__syncthreads();
 
-			for (unsigned int chromosomeIndex = 2 * (threadIdx.x / WARP_SIZE); chromosomeIndex < islandPopulationSize; chromosomeIndex += 2 * blockWarpCount) {
+			for (unsigned int chromosomeIndex = 2 * (threadIdx.x / WARP_SIZE); chromosomeIndex < islandPopulationSize; chromosomeIndex += 2 * blockDim.x / WARP_SIZE) {
 				gene* chromosomeA = population + nWarpSizeAligned * 
 					(blockIdx.x * 2 * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + chromosomeIndex);
 				gene* chromosomeB = population + nWarpSizeAligned * 
@@ -424,7 +162,7 @@ namespace tsp {
 					(!elitism || (chromosomeIndex != islandBestIndex && chromosomeIndex + 1 != islandBestIndex)) && 
 					crossoverProbability > curand_uniform(globalState + tid);
 				if (__shfl_sync(FULL_MASK, performCrossover, 0)) {
-					crossover3(chromosomeA, chromosomeB, size(instance), globalState + tid);
+					crossoverCoalescedWarp(chromosomeA, chromosomeB, size(instance), globalState + tid);
 				}
 
 				// Mutation : chromosomeA
@@ -501,8 +239,8 @@ namespace tsp {
 	template <typename Instance, typename gene = unsigned short>
 	int solveTSPFineGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, gene *globalBestCycle, int blockWarpCount, int seed, bool reportProgress = false) 
 	{
-		unsigned int n = size(instance);
-		unsigned int nWarpSizeAligned = (n & ~(WARP_SIZE - 1)) + WARP_SIZE;
+		cudaError status;
+		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
 		unsigned int* d_cycleWeight, * d_islandBest, * d_islandWorst;
 		bool *d_sourceInSecondBuffer;
 		gene* d_population;
@@ -511,45 +249,78 @@ namespace tsp {
 		unsigned int* h_islandBest = new unsigned int[options.islandCount];
 		unsigned int* h_islandWorst = new unsigned int[options.islandCount];
 		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = (unsigned int)-1;
+		unsigned int globalBestCycleWeight = (unsigned int)-1;
 
-		if (cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMalloc(&d_population, 2 * nWarpSizeAligned * options.islandCount * options.islandPopulationSize * sizeof(gene)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_population, 2 * nWarpSizeAligned * options.islandCount * options.islandPopulationSize * sizeof(gene))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMalloc(&d_globalState, options.islandCount * options.islandPopulationSize * WARP_SIZE * sizeof(curandState)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_globalState, options.islandCount * options.islandPopulationSize * WARP_SIZE * sizeof(curandState))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMalloc(&d_islandBest, options.islandCount * sizeof(unsigned int)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_islandBest, options.islandCount * sizeof(unsigned int))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMalloc(&d_islandWorst, options.islandCount * sizeof(unsigned int)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_islandWorst, options.islandCount * sizeof(unsigned int))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMalloc(&d_sourceInSecondBuffer, options.islandCount * sizeof(bool)) != cudaSuccess)
-			return -1;
+		if ((status = cudaMalloc(&d_sourceInSecondBuffer, options.islandCount * sizeof(bool))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
 		setupCurand<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(d_globalState, seed);
+
+		if ((status = cudaGetLastError()) != cudaSuccess) {
+			std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
 		initializationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE) * sizeof(unsigned int)>>>(
 			instance, d_globalState, d_population, options.islandPopulationSize, d_cycleWeight, d_islandBest, d_islandWorst
 		);
 
-		if (cudaMemset(d_sourceInSecondBuffer, false, options.islandCount * sizeof(bool)) != cudaSuccess)
-			return -1;
+		if ((status = cudaGetLastError()) != cudaSuccess) {
+			std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
+		if ((status = cudaMemset(d_sourceInSecondBuffer, false, options.islandCount * sizeof(bool))) != cudaSuccess) {
+			std::cerr << "Could not set device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
+		if ((status = cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+			std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (reportProgress && cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
+		if ((status = cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+			std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
-		if (cudaDeviceSynchronize() != cudaSuccess)
-			return -1;
+		if (reportProgress && (status = cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+			std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
+
+		if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+			std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
 		updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
@@ -572,23 +343,41 @@ namespace tsp {
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 			);
 
+			if ((status = cudaGetLastError()) != cudaSuccess) {
+				std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
 				instance, d_globalState, d_population, options.islandPopulationSize, 
 				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability, 
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 			);
 
-			if (cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-				return -1;
+			if ((status = cudaGetLastError()) != cudaSuccess) {
+				std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
 
-			if (cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-				return -1;
+			if ((status = cudaMemcpy(h_cycleWeight, d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
 
-			if (reportProgress && cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost) != cudaSuccess)
-				return -1;
+			if ((status = cudaMemcpy(h_islandBest, d_islandBest, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
 
-			if (cudaDeviceSynchronize() != cudaSuccess)
-				return -1;
+			if (reportProgress && (status = cudaMemcpy(h_islandWorst, d_islandWorst, options.islandCount * sizeof(unsigned int), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
+			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
 
 			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
@@ -603,32 +392,43 @@ namespace tsp {
 
 		}
 
-		unsigned int globalBestCycleWeight = (unsigned int)-1, globalBestIslandIndex = (unsigned int)-1;
-		bool globalBestIslandSourceInSecondBuffer = false;
-		for (unsigned int i = 0; i < options.islandCount; i++) {
-			if (globalBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
-				globalBestCycleWeight = h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
-				globalBestIslandIndex = i;
+		{
+			unsigned int globalBestIslandIndex = (unsigned int)-1;
+			bool globalBestIslandSourceInSecondBuffer = false;
+			for (unsigned int i = 0; i < options.islandCount; i++) {
+				if (globalBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
+					globalBestCycleWeight = h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
+					globalBestIslandIndex = i;
+				}
+			}
+
+			if ((status = cudaMemcpy(&globalBestIslandSourceInSecondBuffer, d_sourceInSecondBuffer + globalBestIslandIndex, sizeof(bool), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
+			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
+			gene *d_globalBestCycle = d_population + nWarpSizeAligned * 
+				(globalBestIslandIndex * 2 * options.islandPopulationSize + 
+					(globalBestIslandSourceInSecondBuffer ? options.islandPopulationSize : 0) + 
+				h_islandBest[globalBestIslandIndex]);
+
+			if ((status = cudaMemcpy(globalBestCycle, d_globalBestCycle, size(instance) * sizeof(gene), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
+			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
 			}
 		}
 
-		if (cudaMemcpy(&globalBestIslandSourceInSecondBuffer, d_sourceInSecondBuffer + globalBestIslandIndex, sizeof(bool), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
-
-		if (cudaDeviceSynchronize() != cudaSuccess)
-			return -1;
-
-		gene* d_globalBestCycle = d_population + nWarpSizeAligned * 
-			(globalBestIslandIndex * 2 * options.islandPopulationSize + 
-				(globalBestIslandSourceInSecondBuffer ? options.islandPopulationSize : 0) + 
-			h_islandBest[globalBestIslandIndex]);
-
-		if (cudaMemcpy(globalBestCycle, d_globalBestCycle, n * sizeof(gene), cudaMemcpyDeviceToHost) != cudaSuccess)
-			return -1;
-
-		if (cudaDeviceSynchronize() != cudaSuccess)
-			return -1;
-
+FREE:
 		cudaFree(d_cycleWeight);
 		cudaFree(d_population);
 		cudaFree(d_globalState);

@@ -13,7 +13,7 @@ namespace tsp {
 	// Fixes are done using only warp leader
 	template<typename gene>
 	__device__ __forceinline__
-	void crossover1(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	void crossoverWarpLeader(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end;
@@ -127,7 +127,7 @@ namespace tsp {
 	// Uniqeness is checked using warp broadcast sequential reads of swapped interval
 	template<typename gene>
 	__device__ __forceinline__
-	void crossover2(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	void crossoverSequentialWarp(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end;
@@ -244,7 +244,7 @@ namespace tsp {
 	// Uniqeness is checked using sequential __shfl_sync's of coalesced reads of swapped interval
 	template<typename gene>
 	__device__ __forceinline__
-	void crossover3(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
+	void crossoverCoalescedWarp(gene* chromosomeA, gene* chromosomeB, unsigned int size, curandState* state)
 	{
 		unsigned int lid = threadIdx.x & (WARP_SIZE - 1);
 		unsigned int start, end;
