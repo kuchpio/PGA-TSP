@@ -49,6 +49,11 @@
     <ClInclude Include="Selections\RouleteWheel.h" />
     <ClInclude Include="Mutations\Basic.h" />
     <ClInclude Include="Crossovers\Basic.h" />
+    <ClInclude Include="Algorithm\FineGrained.h" />
+    <ClInclude Include="Mutations\WarpInterval.h" />
+    <ClInclude Include="Crossovers\WarpPMX.h" />
+    <ClInclude Include="Selections\WarpRouletteWheel.h" />
+    <ClInclude Include="Algorithm\WarpCycleHelper.h" />
     <ClInclude Include="Crossovers\PMX.h" />
     <ClInclude Include="Algorithm\VectorReduction.h" />
     <ClInclude Include="Algorithm\BlockSwap.h" />

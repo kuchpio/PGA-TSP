@@ -56,6 +56,8 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <PtxAsOptionV>true</PtxAsOptionV>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -76,6 +78,8 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <PtxAsOptionV>true</PtxAsOptionV>
+      <MaxRegCount>0</MaxRegCount>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -83,11 +87,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithm\Basic.h" />
+    <ClInclude Include="Algorithm\WarpCycleHelper.h" />
+    <ClInclude Include="Algorithm\FineGrained.h" />
     <ClInclude Include="Algorithm\BlockSwap.h" />
     <ClInclude Include="Algorithm\Helper.h" />
     <ClInclude Include="Algorithm\VectorReduction.h" />
     <ClInclude Include="Crossovers\Basic.h" />
     <ClInclude Include="Crossovers\Interval.h" />
+    <ClInclude Include="Crossovers\WarpPMX.h" />
     <ClInclude Include="Crossovers\PMX.h" />
     <ClInclude Include="Instance\GlobalMemoryInstance.h" />
     <ClInclude Include="Instance\HostInstance.h" />
@@ -96,8 +103,10 @@
     <ClInclude Include="Instance\TextureMemoryInstance.h" />
     <ClInclude Include="Mutations\Basic.h" />
     <ClInclude Include="Mutations\Interval.h" />
+    <ClInclude Include="Mutations\WarpInterval.h" />
     <ClInclude Include="Selections\Basic.h" />
     <ClInclude Include="Selections\RouleteWheel.h" />
+    <ClInclude Include="Selections\WarpRouletteWheel.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
