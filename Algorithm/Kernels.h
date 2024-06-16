@@ -9,7 +9,7 @@
 #include "CycleHelper.h"
 #include "../Selections/Basic.h"
 #include "../Crossovers/Basic.h"
-#include "../Crossovers/Interval.h"
+#include "../Crossovers/OX.h"
 #include "../Crossovers/PMX.h"
 #include "../Selections/RouleteWheel.h"
 #include "../Mutations/Basic.h"
@@ -316,7 +316,7 @@ namespace tsp {
 			__syncthreads();
 		}
 
-		SumVectorForChromosomes(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
+		SumVectorForChromosomesAndGetMaxVector(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
 
 		if (bid == 0)
 			bestFitness[blockIdx.x] = sharedFitnessIndex[0];
