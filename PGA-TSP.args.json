@@ -3,6 +3,74 @@
   "Id": "0fb70673-98e6-413e-aa01-2828358ec0f0",
   "Items": [
     {
+      "Id": "f2ecaf71-c6df-40fb-a743-9069fc3659a7",
+      "Command": "-h"
+    },
+    {
+      "Id": "be6eba09-5fb2-4827-853c-bcadaf8f620b",
+      "Command": "--fine"
+    },
+    {
+      "Id": "b5eb7db8-fe0b-46c1-ae53-ce30dcc693fb",
+      "Command": "--coarse"
+    },
+    {
+      "Id": "d8ff8ef2-973e-4bfa-9e5e-a8a3c6b6b058",
+      "Command": "--global"
+    },
+    {
+      "Id": "2462da97-84fa-4644-85a0-8d5d0ed441e9",
+      "Command": "--texture"
+    },
+    {
+      "Id": "86fa2f90-e085-4b5b-859b-9fdc9bdcdee2",
+      "Command": "--islands 8"
+    },
+    {
+      "Id": "0810dc09-dd9e-42d4-a51c-d84e86416f73",
+      "Command": "--population 100"
+    },
+    {
+      "Id": "c427113f-6432-4fb7-ac20-587bcda4f1ca",
+      "Command": "--iterations 300"
+    },
+    {
+      "Id": "02b1dab6-6710-4af4-a44d-8e2c821b6777",
+      "Command": "--stalled-iterations 100"
+    },
+    {
+      "Id": "bbe2c7e3-5e6a-4f11-ba57-a17bbefd364c",
+      "Command": "--migrations 200"
+    },
+    {
+      "Id": "5fa58bf9-0a78-4b7d-95d9-80b1642b0c25",
+      "Command": "--stalled-migrations 50"
+    },
+    {
+      "Id": "41573cf6-c5ff-497e-a049-db5e5b92287c",
+      "Command": "--crossover 0.5"
+    },
+    {
+      "Id": "7c816683-67fc-4818-b3cb-c92cc2312a34",
+      "Command": "--mutation 0.5"
+    },
+    {
+      "Id": "0b7d1100-f5ce-4707-b0be-9337957e1875",
+      "Command": "--elitism"
+    },
+    {
+      "Id": "8765f2e7-37d4-4bfb-a8df-d0196801656f",
+      "Command": "--warps 32"
+    },
+    {
+      "Id": "0e0a075d-1679-4291-a2c7-0f3c76bfe1c2",
+      "Command": "--seed 102"
+    },
+    {
+      "Id": "5070687a-cd5b-4822-929d-51823899732f",
+      "Command": "--progress"
+    },
+    {
       "Id": "61bf8c29-eb0e-442d-b72a-4a8a34ac8cc5",
       "Command": "berlin52.tsp"
     },

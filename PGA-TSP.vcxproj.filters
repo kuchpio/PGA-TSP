@@ -60,6 +60,7 @@
     <ClInclude Include="Instance\Helper.h" />
     <ClInclude Include="Algorithm\CycleHelper.h" />
     <ClInclude Include="Algorithm\CoarseGrained.h" />
+    <ClInclude Include="args.hxx" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
