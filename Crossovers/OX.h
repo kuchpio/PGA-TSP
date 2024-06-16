@@ -8,7 +8,7 @@ namespace tsp {
 	__device__
 		void OX(int* const parent1, int* const parent2, int* child, int size, curandState* state)
 	{
-		int left = curand(state) % (size - 1);
+		int left = curand(state) % size;
 		int right = left + curand(state) % (size - left);
 		for (int i = 0; i < size; ++i)
 		{

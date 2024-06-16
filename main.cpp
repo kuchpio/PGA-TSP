@@ -9,14 +9,16 @@
 #include "Instance/GlobalMemoryInstance.h"
 #include "Algorithm/FineGrained.h"
 #include "Algorithm/CoarseGrained.h"
+#include "Algorithm/OXAproch.h"
 
 int main(int argc, char* argv[])
 {
 	args::ArgumentParser parser("This program uses parallel (CUDA) genetic algorithm to solve travelling salesman problem.", "Authors: Piotr Kucharczyk | Bartosz Maj.");
 	args::HelpFlag helpFlag(parser, "help", "Display this help menu", { 'h', "help" });
 	args::Group approachGroup(parser, "Approach:", args::Group::Validators::Xor);
-	args::Flag coarseFlag(approachGroup, "coarse", "Coarse grained approach", { "coarse" });
-	args::Flag fineFlag(approachGroup, "fine", "Fine grained approach", {"fine"});
+	args::Flag coarsePMXFlag(approachGroup, "coarsepmx", "Coarse grained approach with PMX crossover", { "coarsepmx" });
+	args::Flag coarseOXFlag(approachGroup, "coarseox", "Coarse grained approach with OX crossover", { "coarseox" });
+	args::Flag fineFlag(approachGroup, "fine", "Fine grained approach", { "fine" });
 	args::Group memoryGroup(parser, "Memory:", args::Group::Validators::Xor);
 	args::Flag globalFlag(memoryGroup, "global", "Store instance in global memory", { "global" });
 	args::Flag textureFlag(memoryGroup, "texture", "Store instance in texture memory", { "texture" });
@@ -75,7 +77,7 @@ int main(int argc, char* argv[])
 
 	std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n\n";
 
-    tsp::IslandGeneticAlgorithmOptions options = {
+	tsp::IslandGeneticAlgorithmOptions options = {
 		args::get(islandsFlag),
 		args::get(populationFlag),
 		args::get(iterationsFlag),
@@ -85,25 +87,36 @@ int main(int argc, char* argv[])
 		elitismFlag,
 		args::get(stalledIterationsFlag),
 		args::get(stalledMigrationsFlag)
-    };
+	};
 	int seed = seedFlag ? args::get(seedFlag) : (int)time(NULL);
 
-	int *bestCycle = new int[globalMemoryInstance->size()];
+	int* bestCycle = new int[globalMemoryInstance->size()];
 	int bestCycleWeight;
 
 	const auto start{ std::chrono::high_resolution_clock::now() };
 
-	if (coarseFlag) {
+	if (coarsePMXFlag) {
 		if (globalFlag) {
 			bestCycleWeight = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, seed);
-		} else {
+		}
+		else {
 			bestCycleWeight = tsp::solveTSPCoarseGrained(textureMemoryInstance->deviceInstance(), options, bestCycle, seed);
 		}
-	} else {
+	}
+	else if (fineFlag) {
 		if (globalFlag) {
 			bestCycleWeight = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, args::get(warpCountFlag), seed, progressFlag);
-		} else {
+		}
+		else {
 			bestCycleWeight = tsp::solveTSPFineGrained(textureMemoryInstance->deviceInstance(), options, bestCycle, args::get(warpCountFlag), seed, progressFlag);
+		}
+	}
+	else {
+		if (globalFlag) {
+			bestCycleWeight = tsp::solveTSPOXApproach(globalMemoryInstance->deviceInstance(), options, bestCycle, seed);
+		}
+		else {
+			bestCycleWeight = tsp::solveTSPOXApproach(textureMemoryInstance->deviceInstance(), options, bestCycle, seed);
 		}
 	}
 
@@ -112,15 +125,15 @@ int main(int argc, char* argv[])
 	std::cout << "\n";
 
 	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
-	    std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << "\n";
+		std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << "\n";
 
 	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 	std::cout << "Execution time: " << executionTime.count() << " ms.\n";
 
-    delete hostInstance;
-    delete globalMemoryInstance;
-    delete textureMemoryInstance;
-    delete[] bestCycle;
+	delete hostInstance;
+	delete globalMemoryInstance;
+	delete textureMemoryInstance;
+	delete[] bestCycle;
 
 	if (cudaDeviceReset() != cudaSuccess) {
 		std::cerr << "Could not reset device. \n";

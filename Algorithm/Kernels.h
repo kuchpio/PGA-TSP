@@ -18,7 +18,7 @@
 
 namespace tsp {
 	template <typename Instance>
-	__global__ void geneticOXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
+	__global__ void geneticOXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, float crossoverProbability, float mutationProbability, int maxIterations) {
 		__shared__ int totalFitness[256];
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
@@ -31,7 +31,10 @@ namespace tsp {
 		__syncthreads();
 
 		int* result = new int[instanceSize];
+		bool crossoverFlag = false;
+
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
+			crossoverFlag = false;
 			// Vector Reduction
 			SumVector(totalFitness, fitness);
 
@@ -40,16 +43,21 @@ namespace tsp {
 
 			__syncthreads();
 			//// Crossover - Order Crossover (OX)
-			OX(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
-
+			if (curand_uniform(&localState) <= crossoverProbability) {
+				OX(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
+				crossoverFlag = true;
+			}
 			__syncthreads();
-			for (int i = 0; i < instanceSize; ++i) {
-				chromosome[i] = result[i];
+			if (crossoverFlag)
+			{
+				for (int i = 0; i < instanceSize; ++i) {
+					chromosome[i] = result[i];
+				}
 			}
 			__syncthreads();
 
 			// Mutation
-			if (curand_uniform(&localState) > 0.7) { // 30% chance of mutation
+			if (curand_uniform(&localState) <= mutationProbability) {
 				mutate(chromosome, instanceSize, &localState);
 			}
 			fitness[tid] = calculateCycleWeight(chromosome, instance);
