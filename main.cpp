@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <chrono>
 
 #include "args.hxx"
 #include "Instance/InstanceReader.h"
@@ -90,6 +91,8 @@ int main(int argc, char* argv[])
 	int *bestCycle = new int[globalMemoryInstance->size()];
 	int bestCycleWeight;
 
+	const auto start{ std::chrono::high_resolution_clock::now() };
+
 	if (coarseFlag) {
 		if (globalFlag) {
 			bestCycleWeight = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, seed);
@@ -104,10 +107,15 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	const auto end{ std::chrono::high_resolution_clock::now() };
+
 	std::cout << "\n";
 
 	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
 	    std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << "\n";
+
+	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	std::cout << "Execution time: " << executionTime.count() << " ms.\n";
 
     delete hostInstance;
     delete globalMemoryInstance;
