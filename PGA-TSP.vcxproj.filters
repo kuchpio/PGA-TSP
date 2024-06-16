@@ -30,7 +30,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Crossovers\Interval.h">
+    <ClInclude Include="Crossovers\OX.h">
       <Filter>Crossovers</Filter>
     </ClInclude>
     <ClInclude Include="Selections\Basic.h">

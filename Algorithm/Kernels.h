@@ -18,7 +18,7 @@
 
 namespace tsp {
 	template <typename Instance>
-	__global__ void geneticAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
+	__global__ void geneticOXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, int maxIterations) {
 		__shared__ int totalFitness[256];
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
@@ -36,14 +36,11 @@ namespace tsp {
 			SumVector(totalFitness, fitness);
 
 			// Selection
-			// Assuming a simplistic random selection for demonstration
 			int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
 
-			//// Crossover - Order Crossover (OX)
 			__syncthreads();
-			// Crossover
-			//int* child = intervalCrossover(chromosome, population + selectedIdx * instanceSize, instanceSize, &localState);
-			crossover(chromosome, population + selectedIdx * instanceSize, result, instanceSize, fitness[tid], fitness[selectedIdx]);
+			//// Crossover - Order Crossover (OX)
+			OX(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
 
 			__syncthreads();
 			for (int i = 0; i < instanceSize; ++i) {
@@ -52,7 +49,7 @@ namespace tsp {
 			__syncthreads();
 
 			// Mutation
-			if (curand_uniform(&localState) > 0.9) { // 10% chance of mutation
+			if (curand_uniform(&localState) > 0.7) { // 30% chance of mutation
 				mutate(chromosome, instanceSize, &localState);
 			}
 			fitness[tid] = calculateCycleWeight(chromosome, instance);
@@ -171,7 +168,7 @@ namespace tsp {
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
-			SumVector(totalFitness, fitness);
+			SumVectorForChromosomes(totalFitness, fitness);
 
 			// Selection
 			for (int i = 0; i < 2; ++i) {
@@ -214,8 +211,8 @@ namespace tsp {
 	}
 
 	template <typename Instance>
-	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState, 
-		int maxIterations, int maxIterationStop, float crossoverProbability, float mutationProbability, bool elitism) 
+	__global__ void tspRandomStepAlgorithmKernel(const Instance instance, int* fitness, int* population, int* bestFitness, curandState* globalState,
+		int maxIterations, int maxIterationStop, float crossoverProbability, float mutationProbability, bool elitism)
 	{
 		__shared__ int totalFitness[128];
 		__shared__ int sharedFitness[128];
@@ -249,7 +246,7 @@ namespace tsp {
 
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			// Vector Reduction
-			SumVectorForChromosomes(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
+			SumVectorForChromosomesAndGetMaxVector(totalFitness, fitness, sharedFitness, sharedFitnessIndex);
 			if (counter == maxIterationStop)
 			{
 				break;

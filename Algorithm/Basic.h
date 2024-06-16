@@ -1,6 +1,6 @@
 #ifndef __ALGORITHM_BASIC_H__
 #define __ALGORITHM_BASIC_H__
-#define MAX_ITER 2500
+#define MAX_ITER 1000
 #define SEED 100
 #define NUMBER_OF_ISLAND 10
 #include <cuda_runtime.h>
@@ -112,7 +112,7 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
+		geneticOXAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
