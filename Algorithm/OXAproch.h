@@ -5,7 +5,13 @@ namespace tsp {
 	int solveTSPOXApproach(const Instance instance, struct IslandGeneticAlgorithmOptions options, int* globalBestCycle, int seed) {
 		const int blockSize = 256, gridSize = options.islandCount;
 		int* d_fitness, * d_population, opt = -1;
+		int* d_results;
+		size_t results_size = gridSize * blockSize * size(instance) * sizeof(int);
 		curandState* d_globalState;
+
+		if (cudaMalloc(&d_results, results_size) != cudaSuccess) {
+			goto FREE;
+		}
 
 		if (cudaMalloc(&d_fitness, blockSize * gridSize * sizeof(int)) != cudaSuccess)
 			goto FREE;
@@ -20,7 +26,7 @@ namespace tsp {
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			goto FREE;
-		geneticOXAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, options.crossoverProbability, options.mutationProbability, options.isolatedIterationCount * options.migrationCount);
+		geneticOXAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, options.crossoverProbability, options.mutationProbability, options.isolatedIterationCount * options.migrationCount, d_results);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			goto FREE;
@@ -35,6 +41,7 @@ namespace tsp {
 		cudaFree(d_fitness);
 		cudaFree(d_population);
 		cudaFree(d_globalState);
+		cudaFree(d_results);
 
 		return opt;
 	}

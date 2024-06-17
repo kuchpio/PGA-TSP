@@ -12,18 +12,24 @@
 #include "BlockSwap.h"
 
 namespace tsp {
-
 	template <typename Instance>
-	int solveTSPCoarseGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, int *globalBestCycle, int seed)
+	int solveTSPCoarseGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, int* globalBestCycle, int seed)
 	{
 		cudaError status;
-		const int blockSize = 256, gridSize = options.islandCount;
+		const int blockSize = 128, gridSize = options.islandCount;
 		int* d_fitness, * d_population, * d_bestFitness;
 		int* h_fitness = new int[blockSize * gridSize];
 		int* h_bestFitness = new int[gridSize];
+		int* d_results;
+		size_t results_size = gridSize * blockSize * 2 * size(instance) * sizeof(int);
 		int opt;
 		curandState* d_globalState;
 		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = (unsigned int)-1;
+
+		if ((status = cudaMalloc(&d_results, results_size)) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 
 		if ((status = cudaMalloc(&d_fitness, blockSize * gridSize * sizeof(int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
@@ -64,8 +70,8 @@ namespace tsp {
 
 		for (unsigned int i = 0; i < options.migrationCount; ++i)
 		{
-			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, 
-				options.isolatedIterationCount, options.stalledIsolatedIterationsLimit, options.crossoverProbability, options.mutationProbability, options.elitism);
+			tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState,
+				options.isolatedIterationCount, options.stalledIsolatedIterationsLimit, options.crossoverProbability, options.mutationProbability, options.elitism, d_results);
 
 			if ((status = cudaGetLastError()) != cudaSuccess) {
 				std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
@@ -103,8 +109,8 @@ namespace tsp {
 			}
 		}
 
-		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState, 
-			options.isolatedIterationCount, options.stalledIsolatedIterationsLimit, options.crossoverProbability, options.mutationProbability, options.elitism);
+		tspRandomStepAlgorithmKernel << <gridSize, blockSize / 2 >> > (instance, d_fitness, d_population, d_bestFitness, d_globalState,
+			options.isolatedIterationCount, options.stalledIsolatedIterationsLimit, options.crossoverProbability, options.mutationProbability, options.elitism, d_results);
 
 		if ((status = cudaGetLastError()) != cudaSuccess) {
 			std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
@@ -140,17 +146,17 @@ namespace tsp {
 			std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
 			goto FREE;
 		}
-FREE:
+	FREE:
 		delete[] h_fitness;
 		delete[] h_bestFitness;
 		cudaFree(d_fitness);
 		cudaFree(d_bestFitness);
 		cudaFree(d_population);
 		cudaFree(d_globalState);
+		cudaFree(d_results);
 
 		return opt;
 	}
-
 }
 
 #endif
