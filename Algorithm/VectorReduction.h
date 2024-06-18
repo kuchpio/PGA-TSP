@@ -60,7 +60,7 @@ namespace tsp
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
 		sharedFitness[bid] = fitness[tid];
-		sharedIndexes[bid] = bid;
+		sharedIndexes[bid] = tid;
 		totalFitness[bid] = fitness[tid];
 		__syncthreads();
 		for (int stride = blockDim.x >> 2; stride > 0; stride >>= 1) {

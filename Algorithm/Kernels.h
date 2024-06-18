@@ -18,10 +18,14 @@
 
 namespace tsp {
 	template <typename Instance>
-	__global__ void geneticOXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, float crossoverProbability, float mutationProbability, int maxIterations, int* results) {
+	__global__ void geneticOXAlgorithmKernel(const Instance instance, int* fitness, int* population, curandState* globalState, float crossoverProbability, float mutationProbability, int maxIterations, int* results, bool elitism, int maxIterationStop) {
 		__shared__ int totalFitness[256];
+		__shared__ int sharedIndexes[256];
+		__shared__ int sharedFitness[256];
+		__shared__ int counter;
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
+		int prevFitness = 0;
 		int instanceSize = size(instance);
 		curandState localState = globalState[tid];
 		int* chromosome = population + tid * instanceSize;
@@ -36,14 +40,26 @@ namespace tsp {
 		for (int iteration = 0; iteration < maxIterations; ++iteration) {
 			crossoverFlag = false;
 			// Vector Reduction
-			SumVector(totalFitness, fitness);
-
+			SumAndGetMaxVector(totalFitness, fitness, sharedFitness, sharedIndexes);
+			if (counter == maxIterationStop)
+			{
+				break;
+			}
+			else if (bid == 0)
+			{
+				if (prevFitness == sharedFitness[0])
+					++counter;
+				else
+					counter = 0;
+				prevFitness = sharedFitness[0];
+			}
+			__syncthreads();
 			// Selection
 			int selectedIdx = rouletteWheelSelection(fitness, instanceSize, &localState, totalFitness[0]);
 
 			__syncthreads();
 			//// Crossover - Order Crossover (OX)
-			if (curand_uniform(&localState) <= crossoverProbability) {
+			if (!(elitism && tid == sharedIndexes[0]) && curand_uniform(&localState) <= crossoverProbability) {
 				OX(chromosome, population + selectedIdx * instanceSize, result, instanceSize, &localState);
 				crossoverFlag = true;
 			}
@@ -57,7 +73,7 @@ namespace tsp {
 			__syncthreads();
 
 			// Mutation
-			if (curand_uniform(&localState) <= mutationProbability) {
+			if (!(elitism && tid == sharedIndexes[0]) && curand_uniform(&localState) <= mutationProbability) {
 				mutate(chromosome, instanceSize, &localState);
 			}
 			fitness[tid] = calculateCycleWeight(chromosome, instance);
