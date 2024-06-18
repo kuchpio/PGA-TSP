@@ -30,9 +30,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Crossovers\OX.h">
-      <Filter>Crossovers</Filter>
-    </ClInclude>
     <ClInclude Include="Selections\Basic.h">
       <Filter>Selections</Filter>
     </ClInclude>
@@ -61,6 +58,7 @@
     <ClInclude Include="Algorithm\CycleHelper.h" />
     <ClInclude Include="Algorithm\CoarseGrained.h" />
     <ClInclude Include="args.hxx" />
+    <ClInclude Include="Crossovers\Interval.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
@@ -69,5 +67,6 @@
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="Makefile" />
+    <None Include="run_pga_tsp.sh" />
   </ItemGroup>
 </Project>
