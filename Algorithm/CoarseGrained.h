@@ -16,7 +16,7 @@ namespace tsp {
 	int solveTSPCoarseGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, int* globalBestCycle, int seed)
 	{
 		cudaError status;
-		const int blockSize = 128, gridSize = options.islandCount;
+		const int blockSize = 256, gridSize = options.islandCount;
 		int* d_fitness, * d_population, * d_bestFitness;
 		int* h_fitness = new int[blockSize * gridSize];
 		int* h_bestFitness = new int[gridSize];
