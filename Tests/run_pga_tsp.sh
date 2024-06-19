@@ -1,11 +1,14 @@
 #!/bin/bash
 
+PROJECT_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")"/.. ; pwd -P )
+cd "$PROJECT_PATH"
+
 # Define the executable and input file
-EXECUTABLE="./PGA-TSP.exe"
-INPUT_FILE="berlin52.txt"
+EXECUTABLE="./x64/Release/PGA-TSP.exe"
+INPUT_FILE="berlin52.tsp"
 
 # Define the common parameters
-COMMON_PARAMS="--coarsepmx --global --seed 100 --crossover 0.9 --mutation 0.3 --stalled-iterations 100 --stalled-migrations 50"
+COMMON_PARAMS="--coarse-pmx --global --seed 100 --crossover 0.9 --mutation 0.3 --stalled-iterations 100 --stalled-migrations 50"
 
 # Define the parameter sets
 PARAM_SETS=(

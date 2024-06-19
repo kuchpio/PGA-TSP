@@ -12,7 +12,11 @@
     },
     {
       "Id": "b5eb7db8-fe0b-46c1-ae53-ce30dcc693fb",
-      "Command": "--coarse"
+      "Command": "--coarse-pmx"
+    },
+    {
+      "Id": "5be1cdcd-8154-49fb-9d9d-2ed4faffde81",
+      "Command": "--coarse-ox"
     },
     {
       "Id": "d8ff8ef2-973e-4bfa-9e5e-a8a3c6b6b058",
@@ -68,7 +72,7 @@
     },
     {
       "Id": "5070687a-cd5b-4822-929d-51823899732f",
-      "Command": "--progress"
+      "Command": "--verbose"
     },
     {
       "Id": "61bf8c29-eb0e-442d-b72a-4a8a34ac8cc5",
