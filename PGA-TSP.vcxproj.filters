@@ -4,9 +4,6 @@
     <CudaCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="Interfaces">
-      <UniqueIdentifier>{958215d8-cc5c-487b-bee3-b86fd786f985}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Selections">
       <UniqueIdentifier>{6b3ffb53-40c5-4633-a63a-cbf0c1abad90}</UniqueIdentifier>
     </Filter>
@@ -16,58 +13,104 @@
     <Filter Include="Mutations">
       <UniqueIdentifier>{1b58cd62-4eb8-4e43-834d-f5c4b6a1ecf0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Metrics">
-      <UniqueIdentifier>{1720d6ad-f54e-4092-8bdc-e2093c6f5488}</UniqueIdentifier>
+    <Filter Include="Algorithm">
+      <UniqueIdentifier>{958215d8-cc5c-487b-bee3-b86fd786f985}</UniqueIdentifier>
     </Filter>
-    <Filter Include="RandomGenerator">
-      <UniqueIdentifier>{a42d2267-b797-45f9-861d-42e9efe84eea}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Texture">
-      <UniqueIdentifier>{a8699ec9-eb84-4778-ab2b-6d0581626447}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Kernel">
+    <Filter Include="Instance">
       <UniqueIdentifier>{d458f993-8a1c-40fa-8491-5baae6228fde}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tests">
+      <UniqueIdentifier>{332a7dfc-cc0a-4bc5-9044-3baaf59c6de2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Crossovers\Interval.h">
-      <Filter>Crossovers</Filter>
-    </ClInclude>
     <ClInclude Include="Selections\Basic.h">
       <Filter>Selections</Filter>
     </ClInclude>
     <ClInclude Include="Mutations\Interval.h">
       <Filter>Mutations</Filter>
     </ClInclude>
-    <ClInclude Include="Instance\GlobalMemoryInstance.h" />
-    <ClInclude Include="Instance\HostInstance.h" />
-    <ClInclude Include="Instance\InstanceReader.h" />
-    <ClInclude Include="Instance\Metric.h" />
-    <ClInclude Include="Algorithm\Helper.h" />
-    <ClInclude Include="Instance\TextureMemoryInstance.h" />
-    <ClInclude Include="Algorithm\Basic.h" />
-    <ClInclude Include="Selections\RouleteWheel.h" />
-    <ClInclude Include="Mutations\Basic.h" />
-    <ClInclude Include="Crossovers\Basic.h" />
-    <ClInclude Include="Algorithm\FineGrained.h" />
-    <ClInclude Include="Mutations\WarpInterval.h" />
-    <ClInclude Include="Crossovers\WarpPMX.h" />
-    <ClInclude Include="Selections\WarpRouletteWheel.h" />
-    <ClInclude Include="Algorithm\WarpCycleHelper.h" />
-    <ClInclude Include="Crossovers\PMX.h" />
-    <ClInclude Include="Algorithm\VectorReduction.h" />
-    <ClInclude Include="Algorithm\BlockSwap.h" />
-    <ClInclude Include="Instance\Helper.h" />
-    <ClInclude Include="Algorithm\CycleHelper.h" />
-    <ClInclude Include="Algorithm\CoarseGrained.h" />
     <ClInclude Include="args.hxx" />
+    <ClInclude Include="Algorithm\CoarseGrained.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\FineGrained.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Crossovers\Basic.h">
+      <Filter>Crossovers</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Basic.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Mutations\Basic.h">
+      <Filter>Mutations</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\GlobalMemoryInstance.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\CycleHelper.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\Helper.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\Helper.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\HostInstance.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\InstanceReader.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\Metric.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Crossovers\PMX.h">
+      <Filter>Crossovers</Filter>
+    </ClInclude>
+    <ClInclude Include="Instance\TextureMemoryInstance.h">
+      <Filter>Instance</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\WarpCycleHelper.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Crossovers\WarpPMX.h">
+      <Filter>Crossovers</Filter>
+    </ClInclude>
+    <ClInclude Include="Mutations\WarpInterval.h">
+      <Filter>Mutations</Filter>
+    </ClInclude>
+    <ClInclude Include="Selections\WarpRouletteWheel.h">
+      <Filter>Selections</Filter>
+    </ClInclude>
+    <ClInclude Include="Selections\RouleteWheel.h">
+      <Filter>Selections</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\VectorReduction.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithm\BlockSwap.h">
+      <Filter>Algorithm</Filter>
+    </ClInclude>
+    <ClInclude Include="Crossovers\OX.h">
+      <Filter>Crossovers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Algorithm\Kernels.h" />
-    <Text Include="berlin52.txt" />
+    <Text Include="Algorithm\Kernels.h">
+      <Filter>Algorithm</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="Makefile" />
+    <None Include="Tests\crossover-mutation-performance.sh">
+      <Filter>Tests</Filter>
+    </None>
+    <None Include="Tests\run_pga_tsp.sh">
+      <Filter>Tests</Filter>
+    </None>
   </ItemGroup>
 </Project>

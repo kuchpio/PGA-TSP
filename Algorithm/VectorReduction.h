@@ -7,7 +7,7 @@
 
 namespace tsp
 {
-	__device__ void SumVectorForChromosomes(int* totalFitness, int* fitness, int* sharedFitness, int* sharedFitnessIndex)
+	__device__ void SumVectorForChromosomesAndGetMaxVector(int* totalFitness, int* fitness, int* sharedFitness, int* sharedFitnessIndex)
 	{
 		int tid = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
 		int bid = threadIdx.x;
@@ -32,6 +32,19 @@ namespace tsp
 	{
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
+		totalFitness[bid] = fitness[tid];
+		__syncthreads();
+		for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+			if (bid < stride) {
+				totalFitness[bid] += totalFitness[bid + stride];
+			}
+			__syncthreads();
+		}
+	}
+	__device__ void SumVectorForChromosomes(int* totalFitness, int* fitness)
+	{
+		int tid = blockIdx.x * blockDim.x + threadIdx.x;
+		int bid = threadIdx.x;
 		totalFitness[bid] = fitness[tid] + fitness[tid + 1];
 		__syncthreads();
 		for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
@@ -47,7 +60,7 @@ namespace tsp
 		int tid = blockIdx.x * blockDim.x + threadIdx.x;
 		int bid = threadIdx.x;
 		sharedFitness[bid] = fitness[tid];
-		sharedIndexes[bid] = bid;
+		sharedIndexes[bid] = tid;
 		totalFitness[bid] = fitness[tid];
 		__syncthreads();
 		for (int stride = blockDim.x >> 2; stride > 0; stride >>= 1) {

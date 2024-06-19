@@ -7,7 +7,7 @@
 namespace tsp {
 	// Partially Mapped Crossover (PMX)
 	__device__
-		void PMX(int* a, int* b, const int size, curandState* state) {
+		void PMX(int* a, int* b, int* c, int* d, const int size, curandState* state) {
 		int left = curand(state) % size;
 		int right = curand(state) % size;
 
@@ -16,8 +16,6 @@ namespace tsp {
 			left = right;
 			right = tmp;
 		}
-		int* c = new int[size];
-		int* d = new int[size];
 		for (int i = 0; i < size; i++)
 		{
 			c[i] = a[i];
@@ -57,8 +55,6 @@ namespace tsp {
 				b[i] = d[i];
 			}
 		}
-		delete[] c;
-		delete[] d;
 	}
 }
 

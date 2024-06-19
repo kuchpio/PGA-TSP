@@ -112,7 +112,7 @@ namespace tsp {
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;
 
-		geneticAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
+		geneticOXAlgorithmKernel << <gridSize, blockSize >> > (instance, d_fitness, d_population, d_globalState, MAX_ITER);
 
 		if (cudaDeviceSynchronize() != cudaSuccess)
 			return -1;

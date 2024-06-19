@@ -96,7 +96,7 @@
     <ClInclude Include="Algorithm\VectorReduction.h" />
     <ClInclude Include="args.hxx" />
     <ClInclude Include="Crossovers\Basic.h" />
-    <ClInclude Include="Crossovers\Interval.h" />
+    <ClInclude Include="Crossovers\OX.h" />
     <ClInclude Include="Crossovers\WarpPMX.h" />
     <ClInclude Include="Crossovers\PMX.h" />
     <ClInclude Include="Instance\GlobalMemoryInstance.h" />
@@ -114,11 +114,12 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Algorithm\Kernels.h" />
-    <Text Include="berlin52.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="Makefile" />
+    <None Include="Tests\run_pga_tsp.sh" />
+    <None Include="Tests\crossover-mutation-performance.sh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

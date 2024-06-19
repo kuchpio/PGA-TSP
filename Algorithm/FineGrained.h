@@ -309,6 +309,7 @@ namespace tsp {
 			std::cout << std::endl << std::setw(8) << std::left << "Worst:";
 			for (unsigned int i = 0; i < options.islandCount; i++)
 				std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandWorst[i]];
+			std::cout << "\n";
 		}
 
 		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stalledMigrationsCount < options.stalledMigrationsLimit; migrationNumber++) {
@@ -357,12 +358,13 @@ namespace tsp {
 			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
 			if (reportProgress) {
-				std::cout << "\nCYCLE: " << migrationNumber << " (stable streak: " << stalledMigrationsCount << ")" << std::endl << std::setw(8) << std::left << "Best:";
+				std::cout << "CYCLE: " << migrationNumber << " (stable streak: " << stalledMigrationsCount << ")" << std::endl << std::setw(8) << std::left << "Best:";
 				for (unsigned int i = 0; i < options.islandCount; i++)
 					std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
 				std::cout << std::endl << std::setw(8) << std::left << "Worst:";
 				for (unsigned int i = 0; i < options.islandCount; i++)
 					std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandWorst[i]];
+				std::cout << "\n";
 			}
 
 		}
