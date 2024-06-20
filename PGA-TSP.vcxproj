@@ -118,8 +118,13 @@
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="Makefile" />
+    <None Include="Tests\crossover-mutation-convergence.sh" />
+    <None Include="Tests\elitism.sh" />
+    <None Include="Tests\global-texture-performance.sh" />
+    <None Include="Tests\iterations-migrations.sh" />
     <None Include="Tests\run_pga_tsp.sh" />
     <None Include="Tests\crossover-mutation-performance.sh" />
+    <None Include="Tests\stalled-iterations-stalled-migrations.sh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

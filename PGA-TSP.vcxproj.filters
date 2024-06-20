@@ -112,5 +112,20 @@
     <None Include="Tests\run_pga_tsp.sh">
       <Filter>Tests</Filter>
     </None>
+    <None Include="Tests\crossover-mutation-convergence.sh">
+      <Filter>Tests</Filter>
+    </None>
+    <None Include="Tests\global-texture-performance.sh">
+      <Filter>Tests</Filter>
+    </None>
+    <None Include="Tests\iterations-migrations.sh">
+      <Filter>Tests</Filter>
+    </None>
+    <None Include="Tests\elitism.sh">
+      <Filter>Tests</Filter>
+    </None>
+    <None Include="Tests\stalled-iterations-stalled-migrations.sh">
+      <Filter>Tests</Filter>
+    </None>
   </ItemGroup>
 </Project>
