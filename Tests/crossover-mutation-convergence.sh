@@ -5,8 +5,8 @@ cd "$PROJECT_PATH"
 
 EXECUTABLE="./x64/Release/PGA-TSP.exe"
 
-INSTANCE="berlin52.tsp";
-# INSTANCE="pcb442.tsp";
+# INSTANCE="berlin52.tsp";
+INSTANCE="pcb442.tsp";
 COMMON_PARAMS="$INSTANCE --islands 8 --population 256 --iterations 100 --stalled-iterations 100 --migrations 10 --stalled-migrations 10 --global --seed 100 --elitism"
 
 for APPROACH in "--coarse-pmx" "--coarse-ox" "--fine --warps 32"; do

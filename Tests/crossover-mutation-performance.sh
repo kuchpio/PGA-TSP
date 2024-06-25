@@ -9,7 +9,7 @@ COMMON_PARAMS="berlin52.tsp --islands 8 --population 256 --iterations 10000 --st
 
 for CROSSOVER_PROBABILITY in 0.0 1.0; do
     for MUTATION_PROBABILITY in 0.0 1.0; do
-	    for APPROACH in "--coarse-pmx" "--fine --warps 8" "--fine --warps 32"; do
+	    for APPROACH in "--coarse-pmx" "--coarse-ox" "--fine --warps 8" "--fine --warps 32"; do
 			PARAMS="$COMMON_PARAMS --crossover $CROSSOVER_PROBABILITY --mutation $MUTATION_PROBABILITY $APPROACH"
 			echo "Running: $EXECUTABLE $PARAMS"
 			$EXECUTABLE $PARAMS

@@ -127,5 +127,8 @@
     <None Include="Tests\stalled-iterations-stalled-migrations.sh">
       <Filter>Tests</Filter>
     </None>
+    <None Include="Tests\performance-accuracy.sh">
+      <Filter>Tests</Filter>
+    </None>
   </ItemGroup>
 </Project>

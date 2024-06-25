@@ -118,6 +118,7 @@
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="Makefile" />
+    <None Include="Tests\performance-accuracy.sh" />
     <None Include="Tests\crossover-mutation-convergence.sh" />
     <None Include="Tests\elitism.sh" />
     <None Include="Tests\global-texture-performance.sh" />
