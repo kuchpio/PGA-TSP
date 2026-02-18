@@ -13,6 +13,8 @@
 
 int main(int argc, char* argv[])
 {
+	// MPI_Init();
+
 	args::ArgumentParser parser("This program uses parallel (CUDA) genetic algorithm to solve travelling salesman problem.", "Authors: Piotr Kucharczyk | Bartosz Maj.");
 	args::HelpFlag helpFlag(parser, "help", "Display this help menu", { 'h', "help" });
 	args::Group approachGroup(parser, "Approach:", args::Group::Validators::Xor);
@@ -26,6 +28,7 @@ int main(int argc, char* argv[])
 	args::ValueFlag<unsigned int> populationFlag(parser, "population", "Population size of each island \n(ignored when --coarse-*)", { "population" }, 256);
 	args::ValueFlag<unsigned int> iterationsFlag(parser, "iterations", "Number of iterations between migrations", { "iterations" }, 300);
 	args::ValueFlag<unsigned int> migrationsFlag(parser, "migrations", "Number of migrations", { "migrations" }, 200);
+	args::ValueFlag<unsigned int> intercontinentalMigrationsPeriodFlag(parser, "intercontinental-period", "Number of migrations between consecutive intercontinental migrations", { "intercontinental-period" }, 10);
 	args::ValueFlag<unsigned int> stalledIterationsFlag(parser, "stalled-iterations", "Max number of consecutive iterations between migrations without fitness improvement", { "stalled-iterations" }, 100);
 	args::ValueFlag<unsigned int> stalledMigrationsFlag(parser, "stalled-migrations", "Max number of consecutive migrations without fitness improvement on any island", { "stalled-migrations" }, 50);
 	args::ValueFlag<float> crossoverProbabilityFlag(parser, "crossover", "Crossover probability", { "crossover" }, 0.5f);
@@ -40,21 +43,26 @@ int main(int argc, char* argv[])
 	{
 		parser.ParseCLI(argc, argv);
 	}
-	catch (args::Help)
+	catch (const args::Help&)
 	{
 		std::cout << parser;
 		return EXIT_SUCCESS;
 	}
-	catch (args::ParseError e)
+	catch (const args::ParseError& e)
 	{
 		std::cerr << e.what() << std::endl;
 		std::cerr << parser;
 		return EXIT_FAILURE;
 	}
-	catch (args::ValidationError e)
+	catch (const args::ValidationError& e)
 	{
 		std::cerr << e.what() << std::endl;
 		std::cerr << parser;
+		return EXIT_FAILURE;
+	}
+
+	if (coarsePMXFlag || coarseOXFlag) {
+		std::cerr << "Coarse approaches currently not supported. \n";
 		return EXIT_FAILURE;
 	}
 
@@ -83,6 +91,7 @@ int main(int argc, char* argv[])
 		args::get(populationFlag),
 		args::get(iterationsFlag),
 		args::get(migrationsFlag),
+		args::get(intercontinentalMigrationsPeriodFlag),
 		args::get(crossoverProbabilityFlag),
 		args::get(mutationProbabilityFlag),
 		elitismFlag,
@@ -121,6 +130,9 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	// TODO: Find MPI process with smallest bestCycleWeight
+	// TODO: Copy its best specimen into bestCycle
+
 	const auto end{ std::chrono::high_resolution_clock::now() };
 
 	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
@@ -138,6 +150,8 @@ int main(int argc, char* argv[])
 		std::cerr << "Could not reset device. \n";
 		return EXIT_FAILURE;
 	}
+
+	// MPI_Finalize();
 
 	return EXIT_SUCCESS;
 }

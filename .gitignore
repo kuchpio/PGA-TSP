@@ -490,3 +490,5 @@ pga-tsp
 *.tsp
 /PGA-TSP.vcxproj.user
 /PGA-TSP.vcxproj.user
+/out/build
+/CMakeSettings.json

@@ -225,6 +225,7 @@ namespace tsp {
 		unsigned int* h_islandWorst = new unsigned int[options.islandCount];
 		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = (unsigned int)-1;
 		unsigned int globalBestCycleWeight = (unsigned int)-1;
+		bool immigrationOngoing = false;
 
 		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
@@ -314,14 +315,32 @@ namespace tsp {
 
 		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stalledMigrationsCount < options.stalledMigrationsLimit; migrationNumber++) {
 
-			migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
-				d_population, options.islandPopulationSize, nWarpSizeAligned, 
-				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
-			);
+			if (migrationNumber % options.intercontinentalMigrationPeriod == 0) {
+				// TODO: Gather into staging buffer based on d_islandBest index
+				// MPI_Send(emigrationStagingBuffer, migrationNumber);
 
-			if ((status = cudaGetLastError()) != cudaSuccess) {
-				std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
-				goto FREE;
+				if (immigrationOngoing) {
+					// MPI_Cancel(immigrationRequest);
+					// MPI_Wait(immigrationRequest);
+				}
+				// MPI_iRecv(immigrationStagingBuffer, migrationNumber, immigrationRequest);
+				immigrationOngoing = true;
+			}
+
+			if (immigrationOngoing /* && MPI_Test(immigrationRequest) */) {
+				immigrationOngoing = false;
+				// TODO: Scatter from staging buffer based on d_islandWorst index
+				// TODO: Recompute d_cycleWeight for d_islandWorst
+			} else {
+				migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
+					d_population, options.islandPopulationSize, nWarpSizeAligned, 
+					d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
+				);
+
+				if ((status = cudaGetLastError()) != cudaSuccess) {
+					std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
 			}
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
@@ -361,10 +380,10 @@ namespace tsp {
 				std::cout << "CYCLE: " << migrationNumber << " (stable streak: " << stalledMigrationsCount << ")" << std::endl << std::setw(8) << std::left << "Best:";
 				for (unsigned int i = 0; i < options.islandCount; i++)
 					std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
-				std::cout << std::endl << std::setw(8) << std::left << "Worst:";
+				std::cout << "\n" << std::setw(8) << std::left << "Worst:";
 				for (unsigned int i = 0; i < options.islandCount; i++)
 					std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandWorst[i]];
-				std::cout << "\n";
+				std::cout << std::endl;
 			}
 
 		}

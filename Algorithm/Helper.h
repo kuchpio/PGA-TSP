@@ -15,6 +15,7 @@ namespace tsp {
 		unsigned int islandPopulationSize;
 		unsigned int isolatedIterationCount;
 		unsigned int migrationCount;
+		unsigned int intercontinentalMigrationPeriod;
 		float crossoverProbability;
 		float mutationProbability;
 		bool elitism;
