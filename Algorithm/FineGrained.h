@@ -5,6 +5,8 @@
 #include <device_launch_parameters.h>
 #include <curand_kernel.h>
 #include <iomanip>
+#include <mpi.h>
+#include <sstream>
 
 #include "Helper.h"
 #include "WarpCycleHelper.h"
@@ -45,6 +47,69 @@ namespace tsp {
 			cycleWeight[blockIdx.x * islandPopulationSize + chromosomeIndex] = s_cycleWeight[chromosomeIndex];
 
 		findMinMax(s_cycleWeight, islandPopulationSize, s_reductionBuffer, threadIdx.x, threadIdx.x, islandBest + blockIdx.x, islandWorst + blockIdx.x);
+	}
+
+	template <typename gene>
+	__global__ void emigrationKernel(gene* population, unsigned int islandPopulationSize, unsigned int nWarpSizeAligned,
+		unsigned int* islandBest, bool *sourceInSecondBuffer, gene* emigrationBuffer)
+	{
+		__shared__ gene *s_srcDst[2];
+
+		unsigned int thisIsland = blockIdx.x;
+
+		if (threadIdx.x == 0) {
+			unsigned int thisIslandBestIndex = islandBest[thisIsland];
+			bool thisSourceInSecondBuffer = sourceInSecondBuffer[thisIsland];
+
+			s_srcDst[0] = population + nWarpSizeAligned *
+				(2 * thisIsland * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + thisIslandBestIndex);
+			s_srcDst[1] = emigrationBuffer + nWarpSizeAligned * thisIsland;
+		}
+
+		__syncthreads();
+
+		gene* srcChromosome = s_srcDst[0];
+		gene* dstChromosome = s_srcDst[1];
+
+		for (unsigned int i = threadIdx.x; i < nWarpSizeAligned; i += blockDim.x)
+			dstChromosome[i] = srcChromosome[i];
+	}
+
+	template <typename Instance, typename gene>
+	__global__ void immigrationKernel(const Instance instance, gene* population, unsigned int islandPopulationSize, unsigned int nWarpSizeAligned,
+		unsigned int *cycleWeight, unsigned int* islandWorst, bool *sourceInSecondBuffer, gene* immigrationBuffer)
+	{
+		__shared__ gene *s_srcDst[2];
+
+		unsigned int thisIsland = blockIdx.x;
+		unsigned int thisIslandWorstIndex = 0;
+
+		if (threadIdx.x == 0) {
+			thisIslandWorstIndex = islandWorst[thisIsland];
+			bool thisSourceInSecondBuffer = sourceInSecondBuffer[thisIsland];
+
+			s_srcDst[0] = immigrationBuffer + nWarpSizeAligned * thisIsland;
+			s_srcDst[1] = population + nWarpSizeAligned *
+				(2 * thisIsland * islandPopulationSize + (thisSourceInSecondBuffer ? islandPopulationSize : 0) + thisIslandWorstIndex);
+		}
+
+		__syncthreads();
+
+		gene* srcChromosome = s_srcDst[0];
+		gene* dstChromosome = s_srcDst[1];
+
+		// Update cycle weight on new chromosome (first warp)
+		if (threadIdx.x < warpSize) {
+			auto thisCycleWeight = warpCalculateCycleWeight(srcChromosome, instance);
+
+			if (threadIdx.x == 0) {
+				unsigned int thisIslandWorstIndexGlobal = thisIsland * islandPopulationSize + thisIslandWorstIndex;
+				cycleWeight[thisIslandWorstIndexGlobal] = thisCycleWeight;
+			}
+		} else { // Replace worst chromosome (other warps)
+			for (unsigned int i = threadIdx.x - warpSize; i < nWarpSizeAligned; i += blockDim.x - warpSize)
+				dstChromosome[i] = srcChromosome[i];
+		}
 	}
 
 	template <typename gene>
@@ -212,7 +277,7 @@ namespace tsp {
 	}
 
 	template <typename Instance, typename gene = unsigned short>
-	int solveTSPFineGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, gene *globalBestCycle, int blockWarpCount, int seed, bool reportProgress = false) 
+	int solveTSPFineGrained(const Instance instance, struct IslandGeneticAlgorithmOptions options, gene *continentBestCycle, int blockWarpCount, const int mpiRank, const int mpiSize, MPI_Datatype mpiGene, int seed, const std::string& historyPathname, bool reportProgress = false)
 	{
 		cudaError status;
 		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
@@ -224,8 +289,13 @@ namespace tsp {
 		unsigned int* h_islandBest = new unsigned int[options.islandCount];
 		unsigned int* h_islandWorst = new unsigned int[options.islandCount];
 		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = (unsigned int)-1;
-		unsigned int globalBestCycleWeight = (unsigned int)-1;
+		unsigned int continentBestCycleWeight = (unsigned int)-1;
 		bool immigrationOngoing = false;
+		gene *d_immigrationBuffer, *d_emigrationBuffer;
+		MPI_Request immigrationRequest;
+
+		if (!historyPathname.empty())
+			std::cout << "Saving history to " << historyPathname << "\n";
 
 		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
@@ -253,6 +323,16 @@ namespace tsp {
 		}
 
 		if ((status = cudaMalloc(&d_sourceInSecondBuffer, options.islandCount * sizeof(bool))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
+
+		if ((status = cudaMalloc(&d_immigrationBuffer, nWarpSizeAligned * options.islandCount * sizeof(gene))) != cudaSuccess) {
+			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
+
+		if ((status = cudaMalloc(&d_emigrationBuffer, nWarpSizeAligned * options.islandCount * sizeof(gene))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
 			goto FREE;
 		}
@@ -316,24 +396,62 @@ namespace tsp {
 		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stalledMigrationsCount < options.stalledMigrationsLimit; migrationNumber++) {
 
 			if (migrationNumber % options.intercontinentalMigrationPeriod == 0) {
-				// TODO: Gather into staging buffer based on d_islandBest index
-				// MPI_Send(emigrationStagingBuffer, migrationNumber);
+				emigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
+					d_population, options.islandPopulationSize, nWarpSizeAligned,
+					d_islandBest, d_sourceInSecondBuffer, d_emigrationBuffer
+				);
+
+				if ((status = cudaGetLastError()) != cudaSuccess) {
+					std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+
+				std::cout << "Emigration on " << migrationNumber << " " << mpiRank << " -> " << (mpiRank + 1) % mpiSize << std::endl;
+
+				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+
+				MPI_Send(d_emigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+					(mpiRank + 1) % mpiSize, migrationNumber, MPI_COMM_WORLD);
 
 				if (immigrationOngoing) {
-					// MPI_Cancel(immigrationRequest);
-					// MPI_Wait(immigrationRequest);
+					MPI_Cancel(&immigrationRequest);
+					MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
 				}
-				// MPI_iRecv(immigrationStagingBuffer, migrationNumber, immigrationRequest);
+				MPI_Irecv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+					(mpiRank + mpiSize - 1) % mpiSize, migrationNumber, MPI_COMM_WORLD, &immigrationRequest);
 				immigrationOngoing = true;
 			}
 
-			if (immigrationOngoing /* && MPI_Test(immigrationRequest) */) {
-				immigrationOngoing = false;
-				// TODO: Scatter from staging buffer based on d_islandWorst index
-				// TODO: Recompute d_cycleWeight for d_islandWorst
-			} else {
+			int immigrationComplete;
+			if (immigrationOngoing) {
+				MPI_Test(&immigrationRequest, &immigrationComplete, MPI_STATUS_IGNORE);
+				if (immigrationComplete) {
+					immigrationOngoing = false;
+					std::cout << "Immigration " << migrationNumber << " " << (mpiRank + mpiSize - 1) % mpiSize << " -> " << mpiRank << std::endl;
+
+					immigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
+						instance, d_population, options.islandPopulationSize, nWarpSizeAligned,
+						d_cycleWeight, d_islandWorst, d_sourceInSecondBuffer, d_immigrationBuffer
+					);
+
+					if ((status = cudaGetLastError()) != cudaSuccess) {
+						std::cerr << "Could not launch kernel: " << cudaGetErrorString(status) << ".\n";
+						goto FREE;
+					}
+
+					if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+						std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+						goto FREE;
+					}
+				}
+			}
+
+			if (!immigrationComplete) {
 				migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
-					d_population, options.islandPopulationSize, nWarpSizeAligned, 
+					d_population, options.islandPopulationSize, nWarpSizeAligned,
 					d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer
 				);
 
@@ -344,8 +462,8 @@ namespace tsp {
 			}
 
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
-				instance, d_globalState, d_population, options.islandPopulationSize, 
-				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability, 
+				instance, d_globalState, d_population, options.islandPopulationSize,
+				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability,
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer, options.stalledIsolatedIterationsLimit
 			);
 
@@ -369,6 +487,37 @@ namespace tsp {
 				goto FREE;
 			}
 
+			if (!historyPathname.empty()) {
+				unsigned int continentBestIslandIndex = (unsigned int)-1;
+				bool continentBestIslandSourceInSecondBuffer = false;
+				for (unsigned int i = 0; i < options.islandCount; i++) {
+					if (continentBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
+						continentBestCycleWeight = h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
+						continentBestIslandIndex = i;
+					}
+				}
+
+				if ((status = cudaMemcpy(&continentBestIslandSourceInSecondBuffer, d_sourceInSecondBuffer + continentBestIslandIndex, sizeof(bool), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+					std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+
+				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+
+				gene *d_continentBestCycle = d_population + nWarpSizeAligned *
+					(continentBestIslandIndex * 2 * options.islandPopulationSize +
+						(continentBestIslandSourceInSecondBuffer ? options.islandPopulationSize : 0) +
+					h_islandBest[continentBestIslandIndex]);
+
+				if ((status = cudaMemcpy(continentBestCycle, d_continentBestCycle, size(instance) * sizeof(gene), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+					std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+			}
+
 			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
 				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
 				goto FREE;
@@ -386,14 +535,42 @@ namespace tsp {
 				std::cout << std::endl;
 			}
 
+			if (!historyPathname.empty()) {
+				std::ostringstream historyFullPathnameStream;
+				historyFullPathnameStream << historyPathname << std::setw(4) << std::setfill('0') << migrationNumber << ".json";
+				std::string historyFullPathname = historyFullPathnameStream.str();
+				std::ofstream history(historyFullPathname);
+				if (history.is_open()) {
+					auto cycleJson = nlohmann::json::array();
+					for (int i = 0; i < size(instance); i++)
+						cycleJson.push_back(continentBestCycle[i]);
+
+					auto cycleWeightsJson = nlohmann::json::array();
+					for (int i = 0; i < options.islandCount * options.islandPopulationSize; i++)
+						cycleJson.push_back(h_cycleWeight[i]);
+
+					nlohmann::json iterationJson = {
+						{ "iteration_number", migrationNumber },
+						{ "best_distance", continentBestCycleWeight },
+						{ "best_path", cycleJson },
+						{ "operation_type", "TODO" },
+						{ "goal_function_value", 0 },
+						{ "population_heatmap", cycleWeightsJson }
+					};
+					history << std::setw(4) << iterationJson;
+					history.close();
+				} else {
+					std::cerr << "Could not open file " << historyFullPathname << "\n";
+				}
+			}
 		}
 
 		{
 			unsigned int globalBestIslandIndex = (unsigned int)-1;
 			bool globalBestIslandSourceInSecondBuffer = false;
 			for (unsigned int i = 0; i < options.islandCount; i++) {
-				if (globalBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
-					globalBestCycleWeight = h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
+				if (continentBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
+					continentBestCycleWeight = h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
 					globalBestIslandIndex = i;
 				}
 			}
@@ -408,12 +585,12 @@ namespace tsp {
 				goto FREE;
 			}
 
-			gene *d_globalBestCycle = d_population + nWarpSizeAligned * 
-				(globalBestIslandIndex * 2 * options.islandPopulationSize + 
-					(globalBestIslandSourceInSecondBuffer ? options.islandPopulationSize : 0) + 
+			gene *d_globalBestCycle = d_population + nWarpSizeAligned *
+				(globalBestIslandIndex * 2 * options.islandPopulationSize +
+					(globalBestIslandSourceInSecondBuffer ? options.islandPopulationSize : 0) +
 				h_islandBest[globalBestIslandIndex]);
 
-			if ((status = cudaMemcpy(globalBestCycle, d_globalBestCycle, size(instance) * sizeof(gene), cudaMemcpyDeviceToHost)) != cudaSuccess) {
+			if ((status = cudaMemcpy(continentBestCycle, d_globalBestCycle, size(instance) * sizeof(gene), cudaMemcpyDeviceToHost)) != cudaSuccess) {
 				std::cerr << "Could not copy device memory to host memory: " << cudaGetErrorString(status) << ".\n";
 				goto FREE;
 			}
@@ -425,18 +602,25 @@ namespace tsp {
 		}
 
 FREE:
+		if (immigrationOngoing) {
+			MPI_Cancel(&immigrationRequest);
+			MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
+		}
+
 		cudaFree(d_cycleWeight);
 		cudaFree(d_population);
 		cudaFree(d_globalState);
 		cudaFree(d_islandBest);
 		cudaFree(d_islandWorst);
 		cudaFree(d_sourceInSecondBuffer);
+		cudaFree(d_immigrationBuffer);
+		cudaFree(d_emigrationBuffer);
 
 		delete[] h_cycleWeight;
 		delete[] h_islandBest;
 		delete[] h_islandWorst;
-		
-		return globalBestCycleWeight;
+
+		return continentBestCycleWeight;
 	}
 
 }

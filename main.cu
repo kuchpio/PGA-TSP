@@ -2,6 +2,9 @@
 #include <iostream>
 #include <numeric>
 #include <chrono>
+#include <nlohmann/json.hpp>
+
+#include <mpi.h>
 
 #include "args.hxx"
 #include "Instance/InstanceReader.h"
@@ -13,7 +16,11 @@
 
 int main(int argc, char* argv[])
 {
-	// MPI_Init();
+    MPI_Init(&argc, &argv);
+
+	int mpiRank, mpiSize;
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
+	MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
 
 	args::ArgumentParser parser("This program uses parallel (CUDA) genetic algorithm to solve travelling salesman problem.", "Authors: Piotr Kucharczyk | Bartosz Maj.");
 	args::HelpFlag helpFlag(parser, "help", "Display this help menu", { 'h', "help" });
@@ -37,54 +44,61 @@ int main(int argc, char* argv[])
 	args::ValueFlag<unsigned int> warpCountFlag(parser, "warps", "Number of warps in block \n(ignored when --coarse-*)", { "warps" }, 16);
 	args::ValueFlag<int> seedFlag(parser, "seed", "Seed for random number generator", { "seed" });
 	args::Flag verboseFlag(parser, "verbose", "Print instance info, report progress", { "verbose" });
+	args::ValueFlag<std::string> historyFlag(parser, "history", "History pathname base", { "history" });
 	args::Group requiredGroup(parser, "Required:", args::Group::Validators::All);
 	args::Positional<std::string> inputFilename(requiredGroup, "file", "File that contains a travelling salesman problem instance description");
+	args::Positional<std::string> outputFilename(parser, "tour", "Output file with solution");
+
 	try
 	{
 		parser.ParseCLI(argc, argv);
 	}
 	catch (const args::Help&)
 	{
-		std::cout << parser;
+		if (mpiRank == 0) std::cout << parser;
+		MPI_Finalize();
 		return EXIT_SUCCESS;
 	}
 	catch (const args::ParseError& e)
 	{
-		std::cerr << e.what() << std::endl;
-		std::cerr << parser;
+		if (mpiRank == 0) std::cerr << e.what() << std::endl << parser;
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 	catch (const args::ValidationError& e)
 	{
-		std::cerr << e.what() << std::endl;
-		std::cerr << parser;
+		if (mpiRank == 0) std::cerr << e.what() << std::endl << parser;
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 
 	if (coarsePMXFlag || coarseOXFlag) {
-		std::cerr << "Coarse approaches currently not supported. \n";
+		if (mpiRank == 0) std::cerr << "Coarse approaches currently not supported. \n";
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 
 	std::ifstream input(args::get(inputFilename));
 	if (!input.is_open()) {
 		std::cerr << "Could not open file " << inputFilename << "\n";
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 	tsp::InstanceReader instanceReader(input);
 	input.close();
 
+	if (verboseFlag && mpiRank == 0)
+		std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n\n";
+
 	if (cudaSetDevice(0) != cudaSuccess) {
 		std::cerr << "Could not set device. \n";
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 
 	auto* hostInstance = instanceReader.createHostInstance();
 	auto* globalMemoryInstance = instanceReader.createDeviceInstance<tsp::GlobalMemoryInstance>();
 	auto* textureMemoryInstance = instanceReader.createDeviceInstance<tsp::TextureMemoryInstance>();
-
-	if (verboseFlag)
-		std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n\n";
 
 	tsp::IslandGeneticAlgorithmOptions options = {
 		args::get(islandsFlag),
@@ -100,58 +114,77 @@ int main(int argc, char* argv[])
 	};
 	int seed = seedFlag ? args::get(seedFlag) : (int)time(NULL);
 
-	int* bestCycle = new int[globalMemoryInstance->size()];
-	int bestCycleWeight;
+	std::vector<int> bestCycle(globalMemoryInstance->size());
+	int bestCycleWeightAndRank[2];
 
 	const auto start{ std::chrono::high_resolution_clock::now() };
 
 	if (coarsePMXFlag) {
 		if (globalFlag) {
-			bestCycleWeight = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, seed);
+			bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 		else {
-			bestCycleWeight = tsp::solveTSPCoarseGrained(textureMemoryInstance->deviceInstance(), options, bestCycle, seed);
+			bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 	}
 	else if (fineFlag) {
 		if (globalFlag) {
-			bestCycleWeight = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle, args::get(warpCountFlag), seed, verboseFlag);
+			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), args::get(warpCountFlag), mpiRank, mpiSize, MPI_INT, seed, args::get(historyFlag), verboseFlag);
 		}
 		else {
-			bestCycleWeight = tsp::solveTSPFineGrained(textureMemoryInstance->deviceInstance(), options, bestCycle, args::get(warpCountFlag), seed, verboseFlag);
+			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), args::get(warpCountFlag), mpiRank, mpiSize, MPI_INT, seed, args::get(historyFlag), verboseFlag);
 		}
 	}
 	else {
 		if (globalFlag) {
-			bestCycleWeight = tsp::solveTSPOXApproach(globalMemoryInstance->deviceInstance(), options, bestCycle, seed);
+			bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 		else {
-			bestCycleWeight = tsp::solveTSPOXApproach(textureMemoryInstance->deviceInstance(), options, bestCycle, seed);
+			bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 	}
 
-	// TODO: Find MPI process with smallest bestCycleWeight
-	// TODO: Copy its best specimen into bestCycle
+	int globalBestCycleWeightAndRank[2];
+	MPI_Allreduce(bestCycleWeightAndRank, globalBestCycleWeightAndRank, 1, MPI_2INT, MPI_MINLOC, MPI_COMM_WORLD);
+	if (mpiRank == globalBestCycleWeightAndRank[1])
+		MPI_Send(bestCycle.data(), bestCycle.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
+
+	if (mpiRank == 0)
+		MPI_Recv(bestCycle.data(), bestCycle.size(), MPI_INT, globalBestCycleWeightAndRank[1], 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 	const auto end{ std::chrono::high_resolution_clock::now() };
 
-	if (bestCycleWeight >= 0 && verifyResults(hostInstance, bestCycle, bestCycleWeight))
-		std::cout << "Best hamiltonian cycle length found: " << bestCycleWeight << ".\n";
+	if (globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0]))
+		std::cout << "Best hamiltonian cycle length found: " << globalBestCycleWeightAndRank[0] << " on continent " << globalBestCycleWeightAndRank[1] << ".\n";
 
 	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 	std::cout << "Execution time: " << executionTime.count() << " ms.\n";
 
+	if (mpiRank == 0 && !args::get(outputFilename).empty()) {
+		std::ofstream output(args::get(outputFilename));
+		if (output.is_open()) {
+			std::cout << "Saving output to " << args::get(outputFilename) << "\n";
+
+			for (unsigned int i = 0; i < globalMemoryInstance->size(); i++)
+				output << bestCycle[i] << "\n";
+
+			output.close();
+		} else {
+			std::cerr << "Could not open file " << args::get(outputFilename) << "\n";
+		}
+	}
+
 	delete hostInstance;
 	delete globalMemoryInstance;
 	delete textureMemoryInstance;
-	delete[] bestCycle;
 
 	if (cudaDeviceReset() != cudaSuccess) {
 		std::cerr << "Could not reset device. \n";
+		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
 
-	// MPI_Finalize();
+	MPI_Finalize();
 
 	return EXIT_SUCCESS;
 }
