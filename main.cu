@@ -146,15 +146,19 @@ int main(int argc, char* argv[])
 
 	int globalBestCycleWeightAndRank[2];
 	MPI_Allreduce(bestCycleWeightAndRank, globalBestCycleWeightAndRank, 1, MPI_2INT, MPI_MINLOC, MPI_COMM_WORLD);
+	MPI_Request bestCycleRequest;
 	if (mpiRank == globalBestCycleWeightAndRank[1])
-		MPI_Send(bestCycle.data(), bestCycle.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
+		MPI_Isend(bestCycle.data(), bestCycle.size(), MPI_INT, 0, 0, MPI_COMM_WORLD, &bestCycleRequest);
 
 	if (mpiRank == 0)
 		MPI_Recv(bestCycle.data(), bestCycle.size(), MPI_INT, globalBestCycleWeightAndRank[1], 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
+	if (mpiRank == globalBestCycleWeightAndRank[1])
+		MPI_Wait(&bestCycleRequest, MPI_STATUS_IGNORE);
+
 	const auto end{ std::chrono::high_resolution_clock::now() };
 
-	if (globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0]))
+	if (mpiRank == 0 && globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0]))
 		std::cout << "Best hamiltonian cycle length found: " << globalBestCycleWeightAndRank[0] << " on continent " << globalBestCycleWeightAndRank[1] << ".\n";
 
 	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

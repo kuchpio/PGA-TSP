@@ -292,7 +292,7 @@ namespace tsp {
 		unsigned int continentBestCycleWeight = (unsigned int)-1;
 		bool immigrationOngoing = false;
 		gene *d_immigrationBuffer, *d_emigrationBuffer;
-		MPI_Request immigrationRequest;
+		MPI_Request immigrationRequest, emigrationRequest;
 
 		if (!historyPathname.empty())
 			std::cout << "Saving history to " << historyPathname << "\n";
@@ -396,6 +396,16 @@ namespace tsp {
 		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stalledMigrationsCount < options.stalledMigrationsLimit; migrationNumber++) {
 
 			if (migrationNumber % options.intercontinentalMigrationPeriod == 0) {
+
+				if (migrationNumber > options.intercontinentalMigrationPeriod) {
+					int emigrationComplete;
+					MPI_Test(&emigrationRequest, &emigrationComplete, MPI_STATUS_IGNORE);
+					if (!emigrationComplete) {
+						MPI_Cancel(&emigrationRequest);
+						MPI_Wait(&emigrationRequest, MPI_STATUS_IGNORE);
+					}
+				}
+
 				emigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 					d_population, options.islandPopulationSize, nWarpSizeAligned,
 					d_islandBest, d_sourceInSecondBuffer, d_emigrationBuffer
@@ -413,19 +423,17 @@ namespace tsp {
 					goto FREE;
 				}
 
-				MPI_Send(d_emigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
-					(mpiRank + 1) % mpiSize, migrationNumber, MPI_COMM_WORLD);
+				MPI_Isend(d_emigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+					(mpiRank + 1) % mpiSize, 1, MPI_COMM_WORLD, &emigrationRequest);
 
-				if (immigrationOngoing) {
-					MPI_Cancel(&immigrationRequest);
-					MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
+				if (!immigrationOngoing) {
+					MPI_Irecv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+						(mpiRank + mpiSize - 1) % mpiSize, 1, MPI_COMM_WORLD, &immigrationRequest);
+					immigrationOngoing = true;
 				}
-				MPI_Irecv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
-					(mpiRank + mpiSize - 1) % mpiSize, migrationNumber, MPI_COMM_WORLD, &immigrationRequest);
-				immigrationOngoing = true;
 			}
 
-			int immigrationComplete;
+			int immigrationComplete = 0;
 			if (immigrationOngoing) {
 				MPI_Test(&immigrationRequest, &immigrationComplete, MPI_STATUS_IGNORE);
 				if (immigrationComplete) {
@@ -605,6 +613,15 @@ FREE:
 		if (immigrationOngoing) {
 			MPI_Cancel(&immigrationRequest);
 			MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
+		}
+
+		if (options.migrationCount > options.intercontinentalMigrationPeriod) {
+			int emigrationComplete;
+			MPI_Test(&emigrationRequest, &emigrationComplete, MPI_STATUS_IGNORE);
+			if (!emigrationComplete) {
+				MPI_Cancel(&emigrationRequest);
+				MPI_Wait(&emigrationRequest, MPI_STATUS_IGNORE);
+			}
 		}
 
 		cudaFree(d_cycleWeight);
