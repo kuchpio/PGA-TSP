@@ -294,9 +294,6 @@ namespace tsp {
 		gene *d_immigrationBuffer, *d_emigrationBuffer;
 		MPI_Request immigrationRequest, emigrationRequest;
 
-		if (!historyPathname.empty())
-			std::cout << "Saving history to " << historyPathname << "\n";
-
 		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
 			goto FREE;
@@ -416,7 +413,8 @@ namespace tsp {
 					goto FREE;
 				}
 
-				std::cout << "Emigration on " << migrationNumber << " " << mpiRank << " -> " << (mpiRank + 1) % mpiSize << std::endl;
+				if (reportProgress)
+					std::cout << "Emigration on " << migrationNumber << " (" << mpiRank << " -> " << (mpiRank + 1) % mpiSize << ")" << std::endl;
 
 				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
 					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
@@ -438,7 +436,8 @@ namespace tsp {
 				MPI_Test(&immigrationRequest, &immigrationComplete, MPI_STATUS_IGNORE);
 				if (immigrationComplete) {
 					immigrationOngoing = false;
-					std::cout << "Immigration " << migrationNumber << " " << (mpiRank + mpiSize - 1) % mpiSize << " -> " << mpiRank << std::endl;
+					if (reportProgress)
+						std::cout << "Immigration on " << migrationNumber << " (" << (mpiRank + mpiSize - 1) % mpiSize << " -> " << mpiRank << ")" << std::endl;
 
 					immigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 						instance, d_population, options.islandPopulationSize, nWarpSizeAligned,
@@ -495,7 +494,13 @@ namespace tsp {
 				goto FREE;
 			}
 
+			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
+
 			if (!historyPathname.empty()) {
+				continentBestCycleWeight = (unsigned int)-1;
 				unsigned int continentBestIslandIndex = (unsigned int)-1;
 				bool continentBestIslandSourceInSecondBuffer = false;
 				for (unsigned int i = 0; i < options.islandCount; i++) {
@@ -526,11 +531,6 @@ namespace tsp {
 				}
 			}
 
-			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
-				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
-				goto FREE;
-			}
-
 			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
 			if (reportProgress) {
@@ -544,8 +544,16 @@ namespace tsp {
 			}
 
 			if (!historyPathname.empty()) {
+
+				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
+					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
+					goto FREE;
+				}
+
 				std::ostringstream historyFullPathnameStream;
-				historyFullPathnameStream << historyPathname << std::setw(4) << std::setfill('0') << migrationNumber << ".json";
+				historyFullPathnameStream << historyPathname <<
+					std::setw(3) << std::setfill('0') << mpiRank <<
+					std::setw(4) << std::setfill('0') << migrationNumber << ".json";
 				std::string historyFullPathname = historyFullPathnameStream.str();
 				std::ofstream history(historyFullPathname);
 				if (history.is_open()) {
@@ -555,7 +563,7 @@ namespace tsp {
 
 					auto cycleWeightsJson = nlohmann::json::array();
 					for (int i = 0; i < options.islandCount * options.islandPopulationSize; i++)
-						cycleJson.push_back(h_cycleWeight[i]);
+						cycleWeightsJson.push_back(h_cycleWeight[i]);
 
 					nlohmann::json iterationJson = {
 						{ "iteration_number", migrationNumber },
@@ -565,7 +573,7 @@ namespace tsp {
 						{ "goal_function_value", 0 },
 						{ "population_heatmap", cycleWeightsJson }
 					};
-					history << std::setw(4) << iterationJson;
+					history << iterationJson.dump(-1);
 					history.close();
 				} else {
 					std::cerr << "Could not open file " << historyFullPathname << "\n";
@@ -574,6 +582,7 @@ namespace tsp {
 		}
 
 		{
+			continentBestCycleWeight = (unsigned int)-1;
 			unsigned int globalBestIslandIndex = (unsigned int)-1;
 			bool globalBestIslandSourceInSecondBuffer = false;
 			for (unsigned int i = 0; i < options.islandCount; i++) {
