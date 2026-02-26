@@ -1,6 +1,5 @@
 #include <fstream>
 #include <iostream>
-#include <numeric>
 #include <chrono>
 #include <nlohmann/json.hpp>
 
@@ -90,7 +89,14 @@ int main(int argc, char* argv[])
 	if (verboseFlag && mpiRank == 0)
 		std::cout << "INSTANCE SPECIFICATION\n" << instanceReader << "\n\n";
 
-	if (cudaSetDevice(0) != cudaSuccess) {
+	int deviceCount;
+	if (cudaGetDeviceCount(&deviceCount) != cudaSuccess) {
+		std::cerr << "Could not set device. \n";
+		MPI_Finalize();
+		return EXIT_FAILURE;
+	}
+
+	if (cudaSetDevice(mpiRank % deviceCount) != cudaSuccess) {
 		std::cerr << "Could not set device. \n";
 		MPI_Finalize();
 		return EXIT_FAILURE;
@@ -112,7 +118,7 @@ int main(int argc, char* argv[])
 		args::get(stalledIterationsFlag),
 		args::get(stalledMigrationsFlag)
 	};
-	int seed = seedFlag ? args::get(seedFlag) : (int)time(NULL);
+	int seed = mpiRank + (seedFlag ? args::get(seedFlag) : static_cast<int>(time(nullptr)));
 
 	std::vector<int> bestCycle(globalMemoryInstance->size());
 	int bestCycleWeightAndRank[2];

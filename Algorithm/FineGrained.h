@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <mpi.h>
 #include <sstream>
+#include <limits>
 
 #include "Helper.h"
 #include "WarpCycleHelper.h"
@@ -288,8 +289,8 @@ namespace tsp {
 		unsigned int* h_cycleWeight = new unsigned int[options.islandCount * options.islandPopulationSize];
 		unsigned int* h_islandBest = new unsigned int[options.islandCount];
 		unsigned int* h_islandWorst = new unsigned int[options.islandCount];
-		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = (unsigned int)-1;
-		unsigned int continentBestCycleWeight = (unsigned int)-1;
+		unsigned int stalledMigrationsCount = 0, stalledBestCycleWeight = std::numeric_limits<unsigned int>::max();
+		unsigned int continentBestCycleWeight = std::numeric_limits<unsigned int>::max();
 		bool immigrationOngoing = false;
 		gene *d_immigrationBuffer, *d_emigrationBuffer;
 		MPI_Request immigrationRequest, emigrationRequest;
@@ -387,7 +388,7 @@ namespace tsp {
 			std::cout << std::endl << std::setw(8) << std::left << "Worst:";
 			for (unsigned int i = 0; i < options.islandCount; i++)
 				std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandWorst[i]];
-			std::cout << "\n";
+			std::cout << std::endl;
 		}
 
 		for (unsigned int migrationNumber = 1; migrationNumber <= options.migrationCount && stalledMigrationsCount < options.stalledMigrationsLimit; migrationNumber++) {
@@ -500,8 +501,8 @@ namespace tsp {
 			}
 
 			if (!historyPathname.empty()) {
-				continentBestCycleWeight = (unsigned int)-1;
-				unsigned int continentBestIslandIndex = (unsigned int)-1;
+				continentBestCycleWeight = std::numeric_limits<unsigned int>::max();
+				unsigned int continentBestIslandIndex = std::numeric_limits<unsigned int>::max();
 				bool continentBestIslandSourceInSecondBuffer = false;
 				for (unsigned int i = 0; i < options.islandCount; i++) {
 					if (continentBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
@@ -558,19 +559,19 @@ namespace tsp {
 				std::ofstream history(historyFullPathname);
 				if (history.is_open()) {
 					auto cycleJson = nlohmann::json::array();
+					cycleJson.get_ptr<nlohmann::json::array_t*>()->reserve(size(instance));
 					for (int i = 0; i < size(instance); i++)
-						cycleJson.push_back(continentBestCycle[i]);
+						cycleJson.emplace_back(continentBestCycle[i] + 1);
 
 					auto cycleWeightsJson = nlohmann::json::array();
+					cycleWeightsJson.get_ptr<nlohmann::json::array_t*>()->reserve(options.islandCount * options.islandPopulationSize);
 					for (int i = 0; i < options.islandCount * options.islandPopulationSize; i++)
-						cycleWeightsJson.push_back(h_cycleWeight[i]);
+						cycleWeightsJson.emplace_back(h_cycleWeight[i]);
 
 					nlohmann::json iterationJson = {
-						{ "iteration_number", migrationNumber },
+						{ "migration_number", migrationNumber },
 						{ "best_distance", continentBestCycleWeight },
 						{ "best_path", cycleJson },
-						{ "operation_type", "TODO" },
-						{ "goal_function_value", 0 },
 						{ "population_heatmap", cycleWeightsJson }
 					};
 					history << iterationJson.dump(-1);
@@ -582,8 +583,8 @@ namespace tsp {
 		}
 
 		{
-			continentBestCycleWeight = (unsigned int)-1;
-			unsigned int globalBestIslandIndex = (unsigned int)-1;
+			continentBestCycleWeight = std::numeric_limits<unsigned int>::max();
+			unsigned int globalBestIslandIndex = std::numeric_limits<unsigned int>::max();
 			bool globalBestIslandSourceInSecondBuffer = false;
 			for (unsigned int i = 0; i < options.islandCount; i++) {
 				if (continentBestCycleWeight > h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]]) {
