@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
 	args::ValueFlag<unsigned int> populationFlag(parser, "population", "Population size of each island \n(ignored when --coarse-*)", { "population" }, 256);
 	args::ValueFlag<unsigned int> iterationsFlag(parser, "iterations", "Number of iterations between migrations", { "iterations" }, 300);
 	args::ValueFlag<unsigned int> migrationsFlag(parser, "migrations", "Number of migrations", { "migrations" }, 200);
-	args::ValueFlag<unsigned int> intercontinentalMigrationsPeriodFlag(parser, "intercontinental-period", "Number of migrations between consecutive intercontinental migrations", { "intercontinental-period" }, 10);
+	args::ValueFlag<unsigned int> intercontinentalMigrationsPeriodFlag(parser, "superemigration-period", "Number of migrations between consecutive inter-GPU migrations", { "superemigration-period" }, 10);
 	args::ValueFlag<unsigned int> stalledIterationsFlag(parser, "stalled-iterations", "Max number of consecutive iterations between migrations without fitness improvement", { "stalled-iterations" }, 100);
 	args::ValueFlag<unsigned int> stalledMigrationsFlag(parser, "stalled-migrations", "Max number of consecutive migrations without fitness improvement on any island", { "stalled-migrations" }, 50);
 	args::ValueFlag<float> crossoverProbabilityFlag(parser, "crossover", "Crossover probability", { "crossover" }, 0.5f);

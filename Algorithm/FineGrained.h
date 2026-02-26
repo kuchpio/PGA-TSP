@@ -413,7 +413,7 @@ namespace tsp {
 				}
 
 				if (reportProgress)
-					std::cout << "EMIGRATION on " << migrationNumber << " [" << mpiRank << " -> " << (mpiRank + 1) % mpiSize << "]" << std::endl;
+					std::cout << "EMIGRATION on " << migrationNumber << " [" << mpiRank << "] -> [" << (mpiRank + 1) % mpiSize << "]" << std::endl;
 
 				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
 					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
