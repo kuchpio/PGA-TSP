@@ -379,10 +379,8 @@ namespace tsp {
 		updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
 		if (reportProgress) {
-			std::cout << std::setw(8) << std::left << "Island:";
-			for (unsigned int i = 0; i < options.islandCount; i++)
-				std::cout << std::setw(12) << std::right << i;
-			std::cout << "\nINITIAL (stable streak: " << stalledMigrationsCount << ")" << std::endl << std::setw(8) << std::left << "Best:";
+			std::cout << "[" << mpiRank << "] INITIAL (stable streak: " << stalledMigrationsCount << ")" << std::endl <<
+				std::setw(8) << std::left << "Best:";
 			for (unsigned int i = 0; i < options.islandCount; i++)
 				std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
 			std::cout << std::endl << std::setw(8) << std::left << "Worst:";
@@ -415,7 +413,7 @@ namespace tsp {
 				}
 
 				if (reportProgress)
-					std::cout << "Emigration on " << migrationNumber << " (" << mpiRank << " -> " << (mpiRank + 1) % mpiSize << ")" << std::endl;
+					std::cout << "EMIGRATION on " << migrationNumber << " [" << mpiRank << " -> " << (mpiRank + 1) % mpiSize << "]" << std::endl;
 
 				if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
 					std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
@@ -438,7 +436,7 @@ namespace tsp {
 				if (immigrationComplete) {
 					immigrationOngoing = false;
 					if (reportProgress)
-						std::cout << "Immigration on " << migrationNumber << " (" << (mpiRank + mpiSize - 1) % mpiSize << " -> " << mpiRank << ")" << std::endl;
+						std::cout << "IMMIGRATION on " << migrationNumber << " [" << (mpiRank + mpiSize - 1) % mpiSize << "] -> [" << mpiRank << "]" << std::endl;
 
 					immigrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 						instance, d_population, options.islandPopulationSize, nWarpSizeAligned,
@@ -535,7 +533,9 @@ namespace tsp {
 			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, h_cycleWeight, h_islandBest, options.islandCount, options.islandPopulationSize);
 
 			if (reportProgress) {
-				std::cout << "CYCLE: " << migrationNumber << " (stable streak: " << stalledMigrationsCount << ")" << std::endl << std::setw(8) << std::left << "Best:";
+				std::cout << "[" << mpiRank << "] " "CYCLE: " << migrationNumber <<
+					" (stable streak: " << stalledMigrationsCount << ")" << std::endl <<
+					std::setw(8) << std::left << "Best:";
 				for (unsigned int i = 0; i < options.islandCount; i++)
 					std::cout << std::setw(12) << std::right << h_cycleWeight[i * options.islandPopulationSize + h_islandBest[i]];
 				std::cout << "\n" << std::setw(8) << std::left << "Worst:";
@@ -553,7 +553,7 @@ namespace tsp {
 
 				std::ostringstream historyFullPathnameStream;
 				historyFullPathnameStream << historyPathname <<
-					std::setw(3) << std::setfill('0') << mpiRank <<
+					std::setw(3) << std::setfill('0') << mpiRank << "_" <<
 					std::setw(4) << std::setfill('0') << migrationNumber << ".json";
 				std::string historyFullPathname = historyFullPathnameStream.str();
 				std::ofstream history(historyFullPathname);

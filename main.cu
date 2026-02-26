@@ -152,23 +152,21 @@ int main(int argc, char* argv[])
 
 	int globalBestCycleWeightAndRank[2];
 	MPI_Allreduce(bestCycleWeightAndRank, globalBestCycleWeightAndRank, 1, MPI_2INT, MPI_MINLOC, MPI_COMM_WORLD);
-	MPI_Request bestCycleRequest;
-	if (mpiRank == globalBestCycleWeightAndRank[1])
-		MPI_Isend(bestCycle.data(), bestCycle.size(), MPI_INT, 0, 0, MPI_COMM_WORLD, &bestCycleRequest);
+	if (0 != globalBestCycleWeightAndRank[1]) {
+		if (mpiRank == globalBestCycleWeightAndRank[1])
+			MPI_Send(bestCycle.data(), bestCycle.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
 
-	if (mpiRank == 0)
-		MPI_Recv(bestCycle.data(), bestCycle.size(), MPI_INT, globalBestCycleWeightAndRank[1], 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-	if (mpiRank == globalBestCycleWeightAndRank[1])
-		MPI_Wait(&bestCycleRequest, MPI_STATUS_IGNORE);
+		if (mpiRank == 0)
+			MPI_Recv(bestCycle.data(), bestCycle.size(), MPI_INT, globalBestCycleWeightAndRank[1], 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
 
 	const auto end{ std::chrono::high_resolution_clock::now() };
 
 	if (mpiRank == 0 && globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0]))
-		std::cout << "Best hamiltonian cycle length found: " << globalBestCycleWeightAndRank[0] << " on continent " << globalBestCycleWeightAndRank[1] << ".\n";
+		std::cout << "Best hamiltonian cycle length found: " << globalBestCycleWeightAndRank[0] << " on [" << globalBestCycleWeightAndRank[1] << "].\n";
 
 	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Execution time: " << executionTime.count() << " ms.\n";
+	std::cout << "[" << mpiRank << "] Execution time: " << executionTime.count() << " ms.\n";
 
 	if (mpiRank == 0 && !args::get(outputFilename).empty()) {
 		std::ofstream output(args::get(outputFilename));
@@ -188,13 +186,12 @@ int main(int argc, char* argv[])
 	delete globalMemoryInstance;
 	delete textureMemoryInstance;
 
+	MPI_Finalize();
+
 	if (cudaDeviceReset() != cudaSuccess) {
 		std::cerr << "Could not reset device. \n";
-		MPI_Finalize();
 		return EXIT_FAILURE;
 	}
-
-	MPI_Finalize();
 
 	return EXIT_SUCCESS;
 }
