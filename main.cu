@@ -121,6 +121,7 @@ int main(int argc, char* argv[])
 
 	std::vector<int> bestCycle(globalMemoryInstance->size());
 	int bestCycleWeightAndRank[2];
+    bestCycleWeightAndRank[1] = mpiRank;
 
 	const auto start{ std::chrono::high_resolution_clock::now() };
 

@@ -567,16 +567,26 @@ namespace tsp {
 
 FREE:
 		{ // Cleanup unmatched sends
-			unsigned int scheduledCount;
-			MPI_Request emigrationCountRequest;
+			unsigned int scheduledImmigrationCount, scheduledEmigrationCount;
+			MPI_Request immigrationCountRequest, emigrationCountRequest;
+
 			MPI_Isend(&emigrationCount, 1, MPI_UNSIGNED, (mpiRank + 1) % mpiSize, 2, MPI_COMM_WORLD, &emigrationCountRequest);
-			MPI_Recv(&scheduledCount, 1, MPI_UNSIGNED, (mpiRank + mpiSize - 1) % mpiSize, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&scheduledImmigrationCount, 1, MPI_UNSIGNED, (mpiRank + mpiSize - 1) % mpiSize, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			MPI_Wait(&emigrationCountRequest, MPI_STATUS_IGNORE);
+
+			MPI_Isend(&immigrationCount, 1, MPI_UNSIGNED, (mpiRank + mpiSize - 1) % mpiSize, 3, MPI_COMM_WORLD, &immigrationCountRequest);
+			MPI_Recv(&scheduledEmigrationCount, 1, MPI_UNSIGNED, (mpiRank + 1) % mpiSize, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Wait(&immigrationCountRequest, MPI_STATUS_IGNORE);
+
+			for (unsigned int i = 0; emigrationCount + i < scheduledEmigrationCount; i++) {
+				MPI_Send(d_emigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+					(mpiRank + 1) % mpiSize, 1, MPI_COMM_WORLD);
+			}
 
 			if (immigrationCount > 0)
 				MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
 
-			for (unsigned int i = 0; i < scheduledCount - immigrationCount; i++) {
+			for (unsigned int i = 0; immigrationCount + i < scheduledImmigrationCount; i++) {
 				MPI_Recv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
 					(mpiRank + mpiSize - 1) % mpiSize, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			}
