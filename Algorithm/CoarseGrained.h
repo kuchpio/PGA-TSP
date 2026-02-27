@@ -93,7 +93,7 @@ namespace tsp {
 				goto FREE;
 			}
 
-			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, (unsigned int*)h_fitness, (unsigned int*)h_bestFitness, gridSize, blockSize);
+			updateStalledMigrationsCount(stalledMigrationsCount, stalledBestCycleWeight, (unsigned int*)h_fitness, blockSize, (unsigned int*)h_bestFitness, gridSize);
 			if (stalledMigrationsCount >= options.stalledMigrationsLimit) break;
 
 			ChangeBestChromosomes << <gridSize, blockSize >> > (instance, d_population, d_bestFitness, d_globalState);

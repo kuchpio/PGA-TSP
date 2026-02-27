@@ -1,7 +1,6 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
-#include <nlohmann/json.hpp>
 
 #include <mpi.h>
 
