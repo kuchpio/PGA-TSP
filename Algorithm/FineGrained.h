@@ -292,7 +292,7 @@ namespace tsp {
 		unsigned int continentBestCycleWeight = std::numeric_limits<unsigned int>::max();
 		gene *d_immigrationBuffer, *d_emigrationBuffer;
 		MPI_Request immigrationRequest, emigrationRequest;
-		unsigned int migrationsSinceSuperemigration = 1;
+		unsigned int migrationsSinceSuperemigration = 1, immigrationCount = 0, emigrationCount = 0;
 
 		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
@@ -439,6 +439,7 @@ namespace tsp {
 
 					MPI_Isend(d_emigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
 						(mpiRank + 1) % mpiSize, 1, MPI_COMM_WORLD, &emigrationRequest);
+					emigrationCount++;
 				}
 			}
 
@@ -448,6 +449,7 @@ namespace tsp {
 			} else {
 				MPI_Irecv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
 					(mpiRank + mpiSize - 1) % mpiSize, 1, MPI_COMM_WORLD, &immigrationRequest);
+				immigrationCount++;
 			}
 
 			if (immigrationComplete) {
@@ -471,6 +473,7 @@ namespace tsp {
 
 				MPI_Irecv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
 					(mpiRank + mpiSize - 1) % mpiSize, 1, MPI_COMM_WORLD, &immigrationRequest);
+				immigrationCount++;
 			} else {
 				migrationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE>>>(
 					d_population, options.islandPopulationSize, nWarpSizeAligned,
@@ -563,10 +566,23 @@ namespace tsp {
 		}
 
 FREE:
-		if (0 < options.migrationCount) {
-			if (migrationsSinceSuperemigration >= options.superemigrationPeriod)
+		{ // Cleanup unmatched sends
+			unsigned int scheduledCount;
+			MPI_Request emigrationCountRequest;
+			MPI_Isend(&emigrationCount, 1, MPI_UNSIGNED, (mpiRank + 1) % mpiSize, 2, MPI_COMM_WORLD, &emigrationCountRequest);
+			MPI_Recv(&scheduledCount, 1, MPI_UNSIGNED, (mpiRank + mpiSize - 1) % mpiSize, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Wait(&emigrationCountRequest, MPI_STATUS_IGNORE);
+
+			if (immigrationCount > 0)
+				MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
+
+			for (unsigned int i = 0; i < scheduledCount - immigrationCount; i++) {
+				MPI_Recv(d_immigrationBuffer, nWarpSizeAligned * options.islandCount, mpiGene,
+					(mpiRank + mpiSize - 1) % mpiSize, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			}
+
+			if (emigrationCount > 0)
 				MPI_Wait(&emigrationRequest, MPI_STATUS_IGNORE);
-			MPI_Wait(&immigrationRequest, MPI_STATUS_IGNORE);
 		}
 
 		cudaFree(d_cycleWeight);
