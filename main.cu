@@ -20,29 +20,36 @@ int main(int argc, char* argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
 
-	args::ArgumentParser parser("This program uses parallel (CUDA) genetic algorithm to solve travelling salesman problem.", "Authors: Piotr Kucharczyk | Bartosz Maj.");
-	args::HelpFlag helpFlag(parser, "help", "Display this help menu", { 'h', "help" });
+	args::ArgumentParser parser("This program uses parallel (CUDA) genetic algorithm to solve the Traveling Salesman Problem.", "Authors: Piotr Kucharczyk | Bartosz Maj.");
+	args::HelpFlag helpFlag(parser, "help", "Display this help message", { 'h', "help" });
+
 	args::Group approachGroup(parser, "Approach:", args::Group::Validators::Xor);
 	args::Flag coarsePMXFlag(approachGroup, "coarse-pmx", "Coarse grained approach with PMX crossover", { "coarse-pmx" });
 	args::Flag coarseOXFlag(approachGroup, "coarse-ox", "Coarse grained approach with OX crossover", { "coarse-ox" });
 	args::Flag fineFlag(approachGroup, "fine", "Fine grained approach", { "fine" });
+
 	args::Group memoryGroup(parser, "Memory:", args::Group::Validators::Xor);
 	args::Flag globalFlag(memoryGroup, "global", "Store instance in global memory", { "global" });
 	args::Flag textureFlag(memoryGroup, "texture", "Store instance in texture memory", { "texture" });
-	args::ValueFlag<unsigned int> islandsFlag(parser, "islands", "Number of islands", { "islands" }, 8);
+
+	args::ValueFlag<unsigned int> islandsFlag(parser, "islands", "Number of islands", { "islands" }, 0);
 	args::ValueFlag<unsigned int> populationFlag(parser, "population", "Population size of each island \n(ignored when --coarse-*)", { "population" }, 256);
 	args::ValueFlag<unsigned int> iterationsFlag(parser, "iterations", "Number of iterations between migrations", { "iterations" }, 300);
 	args::ValueFlag<unsigned int> migrationsFlag(parser, "migrations", "Number of migrations", { "migrations" }, 200);
 	args::ValueFlag<unsigned int> intercontinentalMigrationsPeriodFlag(parser, "superemigration-period", "Number of migrations between consecutive inter-GPU migrations", { "superemigration-period" }, 10);
 	args::ValueFlag<unsigned int> stalledIterationsFlag(parser, "stalled-iterations", "Max number of consecutive iterations between migrations without fitness improvement", { "stalled-iterations" }, 100);
 	args::ValueFlag<unsigned int> stalledMigrationsFlag(parser, "stalled-migrations", "Max number of consecutive migrations without fitness improvement on any island", { "stalled-migrations" }, 50);
-	args::ValueFlag<float> crossoverProbabilityFlag(parser, "crossover", "Crossover probability", { "crossover" }, 0.5f);
-	args::ValueFlag<float> mutationProbabilityFlag(parser, "mutation", "Mutation probability", { "mutation" }, 0.5f);
+	args::ValueFlag<float> crossoverProbabilityFlag(parser, "probability", "Crossover probability", { "crossover" }, 0.5f);
+	args::ValueFlag<float> mutationProbabilityFlag(parser, "probability", "Mutation probability", { "mutation" }, 0.5f);
 	args::Flag elitismFlag(parser, "elitism", "Enable elitism", { "elitism" });
-	args::ValueFlag<unsigned int> warpCountFlag(parser, "warps", "Number of warps in block \n(ignored when --coarse-*)", { "warps" }, 16);
+
+	args::ValueFlag<unsigned int> warpCountFlag(parser, "warps", "Number of warps in block \n(ignored when --coarse-*)", { "warps" }, 0);
 	args::ValueFlag<int> seedFlag(parser, "seed", "Seed for random number generator", { "seed" });
 	args::Flag verboseFlag(parser, "verbose", "Print instance info, report progress", { "verbose" });
-	args::ValueFlag<std::string> historyFlag(parser, "history", "History pathname base", { "history" });
+	args::ValueFlag<std::string> historyFlag(parser, "pathname", "History pathname base", { "history" });
+	args::ValueFlag<unsigned int> recordThresholdFlag(parser, "threshold", "Threshold for solution with measurement of time until its achievement", {"record-threshold"}, 0);
+	args::Flag includeScalingInfoFlag(parser, "scaling", "Include scaling info as a CSV row in the final output", {"scaling"});
+
 	args::Group requiredGroup(parser, "Required:", args::Group::Validators::All);
 	args::Positional<std::string> inputFilename(requiredGroup, "file", "File that contains a travelling salesman problem instance description");
 	args::Positional<std::string> outputFilename(parser, "tour", "Output file with solution");
@@ -124,6 +131,9 @@ int main(int argc, char* argv[])
     bestCycleWeightAndRank[1] = mpiRank;
 
 	const auto start{ std::chrono::high_resolution_clock::now() };
+	std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> thresholdTime;
+
+	unsigned int blockWarpCount = args::get(warpCountFlag);
 
 	if (coarsePMXFlag) {
 		if (globalFlag) {
@@ -135,10 +145,20 @@ int main(int argc, char* argv[])
 	}
 	else if (fineFlag) {
 		if (globalFlag) {
-			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), args::get(warpCountFlag), mpiRank, mpiSize, MPI_INT, seed, args::get(historyFlag), verboseFlag);
+			tsp::fillZerosWithOptimalSettings<decltype(globalMemoryInstance->deviceInstance()), int>(
+				options.islandCount, blockWarpCount, options.islandPopulationSize);
+
+			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(globalMemoryInstance->deviceInstance(), options,
+				bestCycle.data(), blockWarpCount, mpiRank, mpiSize, MPI_INT, seed,
+				args::get(historyFlag), verboseFlag, args::get(recordThresholdFlag), thresholdTime);
 		}
 		else {
-			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), args::get(warpCountFlag), mpiRank, mpiSize, MPI_INT, seed, args::get(historyFlag), verboseFlag);
+			tsp::fillZerosWithOptimalSettings<decltype(textureMemoryInstance->deviceInstance()), int>(
+				options.islandCount, blockWarpCount, options.islandPopulationSize);
+
+			bestCycleWeightAndRank[0] = tsp::solveTSPFineGrained(textureMemoryInstance->deviceInstance(), options,
+				bestCycle.data(), blockWarpCount, mpiRank, mpiSize, MPI_INT, seed,
+				args::get(historyFlag), verboseFlag, args::get(recordThresholdFlag), thresholdTime);
 		}
 	}
 	else {
@@ -161,17 +181,25 @@ int main(int argc, char* argv[])
 	}
 
 	const auto end{ std::chrono::high_resolution_clock::now() };
+	auto minThresholdDurationMs = tsp::getMinThresholdDurationMs(thresholdTime, mpiRank, start);
 
-	if (mpiRank == 0 && globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0]))
-		std::cout << "Best hamiltonian cycle length found: " << globalBestCycleWeightAndRank[0] << " on [" << globalBestCycleWeightAndRank[1] << "].\n";
+	int executionDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	MPI_Reduce(&executionDurationMs, &executionDurationMs, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
-	const auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "[" << mpiRank << "] Execution time: " << executionTime.count() << " ms.\n";
+	if (mpiRank == 0 && globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0])) {
+		std::cout << globalBestCycleWeightAndRank[0];
+		if (includeScalingInfoFlag) {
+			std::cout << "," << mpiSize << "," << options.islandCount << "," << blockWarpCount << "," << executionDurationMs << ",";
+			if (minThresholdDurationMs.has_value()) std::cout << minThresholdDurationMs.value();
+		}
+		std::cout << std::endl;
+	}
 
 	if (mpiRank == 0 && !args::get(outputFilename).empty()) {
 		std::ofstream output(args::get(outputFilename));
 		if (output.is_open()) {
-			std::cout << "Saving output to " << args::get(outputFilename) << "\n";
+			if (verboseFlag)
+				std::cout << "Saving output to " << args::get(outputFilename) << "\n";
 
 			for (unsigned int i = 0; i < globalMemoryInstance->size(); i++)
 				output << bestCycle[i] << "\n";

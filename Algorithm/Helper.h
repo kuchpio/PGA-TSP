@@ -12,6 +12,7 @@
 #include <sstream>
 #include <limits>
 #include <optional>
+#include <mpi.h>
 
 namespace tsp {
 
@@ -35,7 +36,7 @@ namespace tsp {
 	}
 
 	template <bool reduceMin = true, bool reduceMax = true>
-	__device__ __forceinline__ void findMinMax(const unsigned int* array, unsigned int arraySize, unsigned int* reductionBuffer, 
+	__device__ __forceinline__ void findMinMax(const unsigned int* array, const unsigned int arraySize, unsigned int* reductionBuffer,
 		unsigned int minIndex, unsigned int maxIndex, unsigned int *minIndexOutput, unsigned int *maxIndexOutput) 
 	{
 		unsigned int wid = threadIdx.x / WARP_SIZE;			// Block warp id
@@ -181,15 +182,14 @@ namespace tsp {
 	template<typename gene>
 	bool verifyResults(const tsp::IHostInstance* instance, gene* bestCycle, unsigned int bestCycleWeight)
 	{
-		unsigned int n = instance->size();
-		bool* visited = new bool[n] { false };
+		const unsigned int n = instance->size();
+		std::vector<bool> visited(n, false);
 		unsigned int verifiedCycleWeight = instance->edgeWeight(bestCycle[n - 1], bestCycle[0]);
 		visited[bestCycle[n - 1]] = true;
 
 		for (unsigned int i = 0; i < n - 1; i++) {
 			if (visited[bestCycle[i]]) {
-				std::cout << "VERIFICATION: Cycle is not hamiltonian. Vertex " << bestCycle[i] << " repeated.\n";
-				delete[] visited;
+				std::cerr << "VERIFICATION: Cycle is not hamiltonian. Vertex " << bestCycle[i] << " repeated.\n";
 				return false;
 			}
 			verifiedCycleWeight += instance->edgeWeight(bestCycle[i], bestCycle[i + 1]);
@@ -197,13 +197,26 @@ namespace tsp {
 		}
 
 		if (bestCycleWeight != verifiedCycleWeight) {
-			std::cout << "VERIFICATION: Cycle has different length (" << verifiedCycleWeight << ") than returned best cycle length (" << bestCycleWeight << ").\n";
-			delete[] visited;
+			std::cerr << "VERIFICATION: Cycle has different length (" << verifiedCycleWeight << ") than returned best cycle length (" << bestCycleWeight << ").\n";
 			return false;
 		}
 
-		delete[] visited;
 		return true;
+	}
+
+	inline bool isThresholdAchieved(
+		const unsigned int* h_cycleWeight, const unsigned int islandPopulationSize,
+		const unsigned int* h_islandBest, const unsigned int islandCount,
+		const unsigned int threshold
+		) {
+
+		for (unsigned int i = 0; i < islandCount; i++) {
+			if (threshold >= h_cycleWeight[i * islandPopulationSize + h_islandBest[i]]) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	template<typename gene>
@@ -297,6 +310,31 @@ namespace tsp {
 		for (unsigned int i = 0; i < islandCount; i++)
 			std::cout << std::setw(12) << std::right << h_cycleWeight[i * islandPopulationSize + h_islandWorst[i]];
 		std::cout << std::endl;
+	}
+
+	inline std::optional<int> getMinThresholdDurationMs(const std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> thresholdTime,
+		const int mpiRank, const std::chrono::time_point<std::chrono::high_resolution_clock> startTime) {
+		int minThresholdDurationMs = -1;
+		MPI_Comm belowThresholdComm;
+		int belowThresholdCommRank;
+		MPI_Comm_split(MPI_COMM_WORLD, thresholdTime.has_value() ? 0 : MPI_UNDEFINED, mpiRank, &belowThresholdComm);
+		MPI_Comm_rank(belowThresholdComm, &belowThresholdCommRank);
+		if (thresholdTime.has_value()) {
+			const int thresholdDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(thresholdTime.value() - startTime).count();
+			MPI_Reduce(&thresholdDurationMs, &minThresholdDurationMs, 1, MPI_INT, MPI_MIN, 0, belowThresholdComm);
+		}
+		MPI_Comm_free(&belowThresholdComm);
+		if (mpiRank != belowThresholdCommRank) {
+			if (belowThresholdCommRank == 0) {
+				MPI_Send(&minThresholdDurationMs, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
+			}
+			if (mpiRank == 0) {
+				MPI_Recv(&minThresholdDurationMs, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			}
+		}
+
+		if (minThresholdDurationMs == -1) return std::nullopt;
+		return minThresholdDurationMs;
 	}
 
 }

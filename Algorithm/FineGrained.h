@@ -6,6 +6,8 @@
 #include <curand_kernel.h>
 #include <iomanip>
 #include <limits>
+#include <chrono>
+#include <optional>
 #include <mpi.h>
 
 #include "Helper.h"
@@ -276,8 +278,31 @@ namespace tsp {
 		}
 	}
 
+	inline size_t islandEvolutionSharedMemorySize(const unsigned int islandPopulationSize) {
+		return (islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) +
+			(islandPopulationSize + WARP_SIZE) * sizeof(float);
+	}
+
+	template <typename Instance, typename gene>
+	void fillZerosWithOptimalSettings(unsigned int& gridSize, unsigned int& warpCount, const unsigned int islandPopulationSize) {
+		cudaError status;
+		int optGridSize, optBlockSize;
+
+		if ((status = cudaOccupancyMaxPotentialBlockSize(&optGridSize, &optBlockSize, islandEvolutionKernel<Instance, gene>,
+			islandEvolutionSharedMemorySize(islandPopulationSize))) != cudaSuccess) {
+			optGridSize = 8;
+			optBlockSize = 16 * 32;
+			return;
+		}
+
+		if (warpCount == 0) warpCount = optBlockSize / WARP_SIZE;
+		if (gridSize == 0) gridSize = optGridSize;
+	}
+
 	template <typename Instance, typename gene = unsigned short>
-	int solveTSPFineGrained(const Instance instance, IslandGeneticAlgorithmOptions options, gene *continentBestCycle, int blockWarpCount, const int mpiRank, const int mpiSize, MPI_Datatype mpiGene, int seed, const std::string& historyPathname, bool reportProgress = false)
+	int solveTSPFineGrained(const Instance instance, IslandGeneticAlgorithmOptions options, gene *continentBestCycle,
+		unsigned int blockWarpCount, const int mpiRank, const int mpiSize, MPI_Datatype mpiGene, int seed,
+		const std::string& historyPathname, bool reportProgress, unsigned int recordThreshold, std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>>& thresholdTime)
 	{
 		cudaError status;
 		unsigned int nWarpSizeAligned = (size(instance) & ~(WARP_SIZE - 1)) + WARP_SIZE;
@@ -293,6 +318,7 @@ namespace tsp {
 		gene *d_immigrationBuffer, *d_emigrationBuffer;
 		MPI_Request immigrationRequest, emigrationRequest;
 		unsigned int migrationsSinceSuperemigration = 1, immigrationCount = 0, emigrationCount = 0;
+		const size_t islandEvolutionSharedMemorySizeValue = islandEvolutionSharedMemorySize(options.islandPopulationSize);
 
 		if ((status = cudaMalloc(&d_cycleWeight, options.islandCount * options.islandPopulationSize * sizeof(unsigned int))) != cudaSuccess) {
 			std::cerr << "Could not allocate device memory: " << cudaGetErrorString(status) << ".\n";
@@ -486,7 +512,7 @@ namespace tsp {
 				}
 			}
 
-			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE + 2) * sizeof(unsigned int) + (options.islandPopulationSize + WARP_SIZE) * sizeof(float)>>>(
+			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, islandEvolutionSharedMemorySizeValue>>>(
 				instance, d_globalState, d_population, options.islandPopulationSize,
 				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability,
 				d_cycleWeight, d_islandBest, d_islandWorst, d_sourceInSecondBuffer, options.stalledIsolatedIterationsLimit
@@ -515,6 +541,11 @@ namespace tsp {
 			if ((status = cudaDeviceSynchronize()) != cudaSuccess) {
 				std::cerr << "Could not synchronize device: " << cudaGetErrorString(status) << ".\n";
 				goto FREE;
+			}
+
+			if (recordThreshold > 0 && !thresholdTime.has_value() &&
+				isThresholdAchieved(h_cycleWeight, options.islandPopulationSize, h_islandBest, options.islandCount, recordThreshold)) {
+				thresholdTime = std::chrono::high_resolution_clock::now();
 			}
 
 			if (!historyPathname.empty()) {
