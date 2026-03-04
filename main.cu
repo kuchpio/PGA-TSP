@@ -9,8 +9,8 @@
 #include "Instance/TextureMemoryInstance.h"
 #include "Instance/GlobalMemoryInstance.h"
 #include "Algorithm/FineGrained.h"
-#include "Algorithm/CoarseGrained.h"
-#include "Algorithm/OXAproch.h"
+// #include "Algorithm/CoarseGrained.h"
+// #include "Algorithm/OXAproch.h"
 
 int main(int argc, char* argv[])
 {
@@ -137,10 +137,10 @@ int main(int argc, char* argv[])
 
 	if (coarsePMXFlag) {
 		if (globalFlag) {
-			bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
+			// bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 		else {
-			bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
+			// bestCycleWeightAndRank[0] = tsp::solveTSPCoarseGrained(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 	}
 	else if (fineFlag) {
@@ -163,10 +163,10 @@ int main(int argc, char* argv[])
 	}
 	else {
 		if (globalFlag) {
-			bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
+			// bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(globalMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 		else {
-			bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
+			// bestCycleWeightAndRank[0] = tsp::solveTSPOXApproach(textureMemoryInstance->deviceInstance(), options, bestCycle.data(), seed);
 		}
 	}
 
@@ -201,7 +201,7 @@ int main(int argc, char* argv[])
 			if (verboseFlag)
 				std::cout << "Saving output to " << args::get(outputFilename) << "\n";
 
-			for (unsigned int i = 0; i < globalMemoryInstance->size(); i++)
+			for (int i = 0; i < globalMemoryInstance->size(); i++)
 				output << bestCycle[i] << "\n";
 
 			output.close();

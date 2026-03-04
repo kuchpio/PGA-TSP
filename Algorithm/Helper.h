@@ -276,12 +276,12 @@ namespace tsp {
 		if (history.is_open()) {
 			auto cycleJson = nlohmann::json::array();
 			cycleJson.get_ptr<nlohmann::json::array_t*>()->reserve(chromosomeSize);
-			for (int i = 0; i < chromosomeSize; i++)
+			for (unsigned int i = 0; i < chromosomeSize; i++)
 				cycleJson.emplace_back(continentBestCycle[i] + 1);
 
 			auto cycleWeightsJson = nlohmann::json::array();
 			cycleWeightsJson.get_ptr<nlohmann::json::array_t*>()->reserve(populationSize);
-			for (int i = 0; i < populationSize; i++)
+			for (unsigned int i = 0; i < populationSize; i++)
 				cycleWeightsJson.emplace_back(cycleWeight[i]);
 
 			nlohmann::json iterationJson = {
