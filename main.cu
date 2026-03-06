@@ -181,15 +181,16 @@ int main(int argc, char* argv[])
 	}
 
 	const auto end{ std::chrono::high_resolution_clock::now() };
-	auto minThresholdDurationMs = tsp::getMinThresholdDurationMs(thresholdTime, mpiRank, start);
+	auto minThresholdDurationMs = tsp::getMinThresholdDurationMs(thresholdTime, mpiRank, mpiSize, start);
 
 	int executionDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-	MPI_Reduce(&executionDurationMs, &executionDurationMs, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+	int maxExecutionDurationMs;
+	MPI_Reduce(&executionDurationMs, &maxExecutionDurationMs, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
 	if (mpiRank == 0 && globalBestCycleWeightAndRank[0] >= 0 && verifyResults(hostInstance, bestCycle.data(), globalBestCycleWeightAndRank[0])) {
 		std::cout << globalBestCycleWeightAndRank[0];
 		if (includeScalingInfoFlag) {
-			std::cout << "," << mpiSize << "," << options.islandCount << "," << blockWarpCount << "," << executionDurationMs << ",";
+			std::cout << "," << mpiSize << "," << options.islandCount << "," << blockWarpCount << "," << maxExecutionDurationMs << ",";
 			if (minThresholdDurationMs.has_value()) std::cout << minThresholdDurationMs.value();
 		}
 		std::cout << std::endl;

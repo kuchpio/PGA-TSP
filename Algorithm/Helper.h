@@ -313,25 +313,24 @@ namespace tsp {
 	}
 
 	inline std::optional<int> getMinThresholdDurationMs(const std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> thresholdTime,
-		const int mpiRank, const std::chrono::time_point<std::chrono::high_resolution_clock> startTime) {
+		const int mpiRank, const int mpiSize, const std::chrono::time_point<std::chrono::high_resolution_clock> startTime) {
+
 		int minThresholdDurationMs = -1;
 		MPI_Comm belowThresholdComm;
-		int belowThresholdCommRank;
-		MPI_Comm_split(MPI_COMM_WORLD, thresholdTime.has_value() ? 0 : MPI_UNDEFINED, mpiRank, &belowThresholdComm);
+		int belowThresholdCommRank, belowThresholdCommSize;
+		MPI_Comm_split(MPI_COMM_WORLD, thresholdTime.has_value(), mpiRank, &belowThresholdComm);
 		MPI_Comm_rank(belowThresholdComm, &belowThresholdCommRank);
+		MPI_Comm_size(belowThresholdComm, &belowThresholdCommSize);
 		if (thresholdTime.has_value()) {
 			const int thresholdDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(thresholdTime.value() - startTime).count();
 			MPI_Reduce(&thresholdDurationMs, &minThresholdDurationMs, 1, MPI_INT, MPI_MIN, 0, belowThresholdComm);
+			if (belowThresholdCommRank == 0 && mpiRank != 0)
+				MPI_Send(&minThresholdDurationMs, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
 		}
 		MPI_Comm_free(&belowThresholdComm);
-		if (mpiRank != belowThresholdCommRank) {
-			if (belowThresholdCommRank == 0) {
-				MPI_Send(&minThresholdDurationMs, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
-			}
-			if (mpiRank == 0) {
-				MPI_Recv(&minThresholdDurationMs, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			}
-		}
+
+		if (mpiRank == 0 && !thresholdTime.has_value() && belowThresholdCommSize < mpiSize)
+			MPI_Recv(&minThresholdDurationMs, 1, MPI_INT, MPI_ANY_SOURCE, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 		if (minThresholdDurationMs == -1) return std::nullopt;
 		return minThresholdDurationMs;
