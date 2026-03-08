@@ -18,6 +18,7 @@
 
 #define WARP_SIZE 32
 #define FULL_MASK 0xffffffff
+#define MAX_STANDARD_SHARED_MEMORY_SIZE 49152 // 48KB
 
 namespace tsp {
 
@@ -287,12 +288,16 @@ namespace tsp {
 	void fillZerosWithOptimalSettings(unsigned int& gridSize, unsigned int& warpCount, const unsigned int islandPopulationSize) {
 		cudaError status;
 		int optGridSize, optBlockSize;
+		const size_t islandEvolutionSharedMemorySizeValue = islandEvolutionSharedMemorySize(islandPopulationSize);
 
-		if ((status = cudaOccupancyMaxPotentialBlockSize(&optGridSize, &optBlockSize, islandEvolutionKernel<Instance, gene>,
-			islandEvolutionSharedMemorySize(islandPopulationSize))) != cudaSuccess) {
+		if (islandEvolutionSharedMemorySizeValue > MAX_STANDARD_SHARED_MEMORY_SIZE && (status = cudaFuncSetAttribute(
+			islandEvolutionKernel<Instance, gene>, cudaFuncAttributeMaxDynamicSharedMemorySize, islandEvolutionSharedMemorySizeValue)) != cudaSuccess) {
+			std::cerr << "Could not increase max dynamic shared memory size: " << cudaGetErrorString(status) << ".\n";
+		}
+		if (cudaOccupancyMaxPotentialBlockSize(&optGridSize, &optBlockSize, islandEvolutionKernel<Instance, gene>,
+			islandEvolutionSharedMemorySizeValue) != cudaSuccess) {
 			optGridSize = 8;
-			optBlockSize = 16 * 32;
-			return;
+			optBlockSize = 16 * WARP_SIZE;
 		}
 
 		if (warpCount == 0) warpCount = optBlockSize / WARP_SIZE;
@@ -367,6 +372,11 @@ namespace tsp {
 			goto FREE;
 		}
 
+		if (islandEvolutionSharedMemorySizeValue > MAX_STANDARD_SHARED_MEMORY_SIZE && (status = cudaFuncSetAttribute(
+			initializationKernel<Instance, gene>, cudaFuncAttributeMaxDynamicSharedMemorySize, islandEvolutionSharedMemorySizeValue)) != cudaSuccess) {
+			std::cerr << "Could not increase max dynamic shared memory size: " << cudaGetErrorString(status) << ".\n";
+			goto FREE;
+		}
 		initializationKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, (options.islandPopulationSize + 4 * WARP_SIZE) * sizeof(unsigned int)>>>(
 			instance, d_globalState, d_population, options.islandPopulationSize, d_cycleWeight, d_islandBest, d_islandWorst
 		);
@@ -512,6 +522,11 @@ namespace tsp {
 				}
 			}
 
+			if (islandEvolutionSharedMemorySizeValue > MAX_STANDARD_SHARED_MEMORY_SIZE && (status = cudaFuncSetAttribute(
+				islandEvolutionKernel<Instance, gene>, cudaFuncAttributeMaxDynamicSharedMemorySize, islandEvolutionSharedMemorySizeValue)) != cudaSuccess) {
+				std::cerr << "Could not increase max dynamic shared memory size: " << cudaGetErrorString(status) << ".\n";
+				goto FREE;
+			}
 			islandEvolutionKernel<<<options.islandCount, blockWarpCount * WARP_SIZE, islandEvolutionSharedMemorySizeValue>>>(
 				instance, d_globalState, d_population, options.islandPopulationSize,
 				options.isolatedIterationCount, options.elitism, options.crossoverProbability, options.mutationProbability,
