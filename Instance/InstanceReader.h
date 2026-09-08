@@ -69,6 +69,9 @@ namespace tsp {
 			if (CeilEuclidean2D::IsMatching(this->_metric))
 				return new HostMemoryInstance(this->_x, this->_y, this->_dimension, CeilEuclidean2D { });
 
+			if (Geolocation::IsMatching(this->_metric))
+				return new HostMemoryInstance(this->_x, this->_y, this->_dimension, Geolocation { });
+
 			return new HostMemoryInstance(this->_x, this->_y, this->_dimension, Euclidean2D { });
 		}
 
@@ -76,6 +79,9 @@ namespace tsp {
 		const DeviceInstanceHostAdapter<DeviceInstance>* createDeviceInstance() const {
 			if (CeilEuclidean2D::IsMatching(this->_metric))
 				return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, CeilEuclidean2D { });
+
+			if (Geolocation::IsMatching(this->_metric))
+				return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, Geolocation { });
 
 			return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, Euclidean2D { });
 		}
