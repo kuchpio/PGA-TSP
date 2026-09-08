@@ -72,6 +72,9 @@ namespace tsp {
 			if (Geolocation::IsMatching(this->_metric))
 				return new HostMemoryInstance(this->_x, this->_y, this->_dimension, Geolocation { });
 
+			if (GeolocationKM::IsMatching(this->_metric))
+				return new HostMemoryInstance(this->_x, this->_y, this->_dimension, GeolocationKM { });
+
 			return new HostMemoryInstance(this->_x, this->_y, this->_dimension, Euclidean2D { });
 		}
 
@@ -82,6 +85,9 @@ namespace tsp {
 
 			if (Geolocation::IsMatching(this->_metric))
 				return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, Geolocation { });
+
+			if (GeolocationKM::IsMatching(this->_metric))
+				return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, GeolocationKM { });
 
 			return new DeviceInstanceHostAdapter<DeviceInstance>(this->_x, this->_y, this->_dimension, Euclidean2D { });
 		}
