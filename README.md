@@ -14,7 +14,7 @@ The project can then be built using standard CMake procedures.
 
 ### Running
 
-The input must be provided in the TSPLIB format, but currently only `EUC_2D` and `CEIL_2D` metrics are supported.
+The input must be provided in the TSPLIB format, but currently only `EUC_2D`, `CEIL_2D`, `GEOM` (see [here](https://www.math.uwaterloo.ca/tsp/world/geom.html)), and `GEOM_KM` metrics are supported.
 All options of the genetic algorithm and its execution can be found in the help message.
 ```
 ./pga-tsp --help
