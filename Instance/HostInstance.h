@@ -10,6 +10,7 @@ namespace tsp {
     public:
         virtual int size() const = 0;
         virtual int edgeWeight(const int from, const int to) const = 0;
+        virtual ~IHostInstance() = default;
     };
 
     class HostMemoryInstance : public IHostInstance {
@@ -38,7 +39,7 @@ namespace tsp {
             return this->_adjecencyMatrix[from * this->_size + to];
         }
 
-        ~HostMemoryInstance() {
+        ~HostMemoryInstance() override {
             delete[] this->_adjecencyMatrix;
         }
     };
